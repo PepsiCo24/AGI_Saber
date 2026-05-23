@@ -116,8 +116,6 @@ body {
 .doc-item .doc-icon { color: var(--green); font-size: 13px; }
 .doc-item .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-item .doc-chunks { color: var(--text3); font-size: 11px; flex-shrink: 0; }
-.doc-item .doc-del { cursor: pointer; color: #a0aec0; font-size: 15px; font-weight: bold; line-height: 1; padding: 0 4px; border-radius: 4px; flex-shrink: 0; transition: color .15s; }
-.doc-item .doc-del:hover { color: #e53e3e; background: rgba(229,62,62,0.1); }
 
 /* ── 近期对话 ── */
 .recent {
@@ -530,33 +528,6 @@ body {
   white-space: pre-wrap;
 }
 
-/* Progress indicator */
-.progress-bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px;
-  background: var(--amber-l);
-  border-radius: 8px;
-  font-size: 12px; color: var(--amber);
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.progress-spinner {
-  width: 14px; height: 14px;
-  border: 2px solid var(--amber);
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.interrupted-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 6px;
-  background: var(--red-l); color: var(--red);
-  font-size: 11px; font-weight: 600;
-  margin-bottom: 6px;
-}
-
 /* ── Input area ── */
 .input-area {
   background: var(--card);
@@ -594,20 +565,11 @@ body {
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 8px rgba(99,102,241,.3);
-  transition: opacity .15s, transform .1s, background .15s;
+  transition: opacity .15s, transform .1s;
 }
 .send-btn:hover   { opacity: .9; }
 .send-btn:active  { transform: scale(.95); }
 .send-btn:disabled { opacity: .4; cursor: default; }
-.send-btn.stop {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  box-shadow: 0 2px 8px rgba(239,68,68,.3);
-  animation: pulse-stop 1.5s infinite;
-}
-@keyframes pulse-stop {
-  0%, 100% { box-shadow: 0 2px 8px rgba(239,68,68,.3); }
-  50% { box-shadow: 0 2px 12px rgba(239,68,68,.5); }
-}
 
 .input-hint { margin-top: 7px; display: flex; gap: 8px; flex-wrap: wrap; }
 .hint-chip {
@@ -704,7 +666,7 @@ body {
     <div class="input-row">
       <textarea class="input-box" id="input" placeholder="输入消息，Enter 发送，Shift+Enter 换行…" rows="1"
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="send-btn" id="sendBtn" onclick="handleSendBtn()">↑</button>
+      <button class="send-btn" id="sendBtn" onclick="send()">↑</button>
     </div>
     <div class="input-hint">
       <span class="hint-chip" onclick="qs('你是谁？')">你是谁</span>
@@ -725,8 +687,7 @@ let selectedTools = [];   // names of checked tools
 let availableTools = [];  // [{name, desc}]
 let sessions = JSON.parse(localStorage.getItem('ai_sessions') || '[]');
 let currentId = null;
-let uploadedDocs = [];
-localStorage.removeItem('ai_docs');
+let uploadedDocs = JSON.parse(localStorage.getItem('ai_docs') || '[]');
 let isLoading = false;
 
 // ══════════════════════════════════════════
@@ -815,15 +776,16 @@ zone.addEventListener('drop', async e => {
 });
 
 async function uploadFile(file) {
-  const text = await file.text();
   try {
+    const formData = new FormData();
+    formData.append('file', file);
+
     const res = await fetch('/api/upload', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text })
+      body: formData
     }).then(r => r.json());
 
-    const doc = { name: file.name, chunks: res.chunk_count, docHash: res.doc_hash, ts: Date.now() };
+    const doc = { name: file.name, chunks: res.chunk_count, ts: Date.now() };
     uploadedDocs = uploadedDocs.filter(d => d.name !== file.name);
     uploadedDocs.unshift(doc);
     localStorage.setItem('ai_docs', JSON.stringify(uploadedDocs));
@@ -835,42 +797,12 @@ async function uploadFile(file) {
 
 function renderDocs() {
   const el = document.getElementById('docList');
-  if (uploadedDocs.length === 0) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0">暂无文档</div>';
-    return;
-  }
-  el.innerHTML = uploadedDocs.slice(0, 6).map(d => {
-    const delBtn = d.docHash
-      ? `<span class="doc-del" onclick="deleteDoc('${d.docHash}','${d.name}')" title="删除">×</span>`
-      : '';
-    return `
+  el.innerHTML = uploadedDocs.slice(0, 6).map(d => `
     <div class="doc-item">
       <span class="doc-icon">✓</span>
       <span class="doc-name" title="${d.name}">${d.name}</span>
-      <span class="doc-chunks">${d.chunks} 块</span>
-      ${delBtn}
-    </div>`;
-  }).join('');
-}
-
-async function deleteDoc(docHash, name) {
-  if (!confirm('确定删除「' + name + '」？')) return;
-  try {
-    const res = await fetch('/api/docs/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ doc_hash: docHash })
-    });
-    if (!res.ok) {
-      console.error('删除失败:', res.status);
-      return;
-    }
-    uploadedDocs = uploadedDocs.filter(d => d.docHash !== docHash);
-    localStorage.setItem('ai_docs', JSON.stringify(uploadedDocs));
-    renderDocs();
-  } catch(e) {
-    console.error('删除失败', e);
-  }
+      <span class="doc-chunks">${d.chunks || 0} 块</span>
+    </div>`).join('');
 }
 
 // ══════════════════════════════════════════
@@ -1081,11 +1013,6 @@ function buildReply(data) {
       </div>`);
   }
 
-  // ── 中断标记 ──
-  if (data.interrupted) {
-    parts.push('<div class="interrupted-badge">⏹ 已中断</div>');
-  }
-
   // ── 最终回答 ──
   parts.push(`<div class="answer-text">${escHtml(data.answer || '')}</div>`);
 
@@ -1100,42 +1027,8 @@ function toggleThink(id) {
 }
 
 // ══════════════════════════════════════════
-//  Send / Stop
+//  Send
 // ══════════════════════════════════════════
-
-function handleSendBtn() {
-  if (isLoading) {
-    stopChat();
-  } else {
-    send();
-  }
-}
-
-function stopChat() {
-  // Abort any in-flight fetch
-  if (window._chatAbortCtrl) {
-    window._chatAbortCtrl.abort();
-    window._chatAbortCtrl = null;
-  }
-  // Also notify server to cancel
-  fetch('/api/chat/cancel', { method: 'POST' }).catch(() => {});
-  setLoadingState(false);
-}
-
-function setLoadingState(loading) {
-  isLoading = loading;
-  const btn = document.getElementById('sendBtn');
-  if (loading) {
-    btn.textContent = '■';
-    btn.classList.add('stop');
-    btn.disabled = false;
-  } else {
-    btn.textContent = '↑';
-    btn.classList.remove('stop');
-    btn.disabled = false;
-  }
-}
-
 async function send() {
   const input = document.getElementById('input');
   const msg = input.value.trim();
@@ -1148,11 +1041,10 @@ async function send() {
   pushMessage('user', userHtml);
   input.value = ''; autoResize(input);
 
-  setLoadingState(true);
+  // typing indicator
+  isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
   const typingRow = appendBubble('ai', '<div class="typing"><span></span><span></span><span></span></div>', true);
-
-  // Create abort controller for cancellation
-  window._chatAbortCtrl = new AbortController();
 
   try {
     const body = {
@@ -1161,103 +1053,31 @@ async function send() {
       selected_tools: selectedTools,
       explicit: true
     };
-
-    const resp = await fetch('/api/chat/stream', {
+    const data = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: window._chatAbortCtrl.signal
-    });
-
-    if (!resp.ok) {
-      // Fallback to sync endpoint
-      const syncData = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }).then(r => r.json());
-      typingRow.remove();
-      const replyHtml = buildReply(syncData);
-      const msgEl = appendBubble('ai', replyHtml, true);
-      autoExpandThinking(msgEl, syncData);
-      pushMessage('ai', replyHtml);
-      return;
-    }
-
-    // Stream SSE events
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let sseBuffer = '';
-    let finalResult = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      sseBuffer += decoder.decode(value, { stream: true });
-
-      // Parse complete SSE events (separated by blank lines)
-      const parts = sseBuffer.split('\n\n');
-      sseBuffer = parts.pop(); // keep incomplete part
-
-      for (const part of parts) {
-        let evtName = '';
-        let evtData = '';
-        for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) evtName = line.slice(7).trim();
-          if (line.startsWith('data: ')) evtData = line.slice(6);
-        }
-        if (evtName === 'done' && evtData) {
-          try { finalResult = JSON.parse(evtData); } catch(e) {}
-        }
-      }
-    }
-
-    // Parse any remaining data
-    if (sseBuffer.trim()) {
-      for (const line of sseBuffer.split('\n')) {
-        if (line.startsWith('data: ')) {
-          try { finalResult = JSON.parse(line.slice(6)); } catch(e) {}
-        }
-      }
-    }
+      body: JSON.stringify(body)
+    }).then(r => r.json());
 
     typingRow.remove();
-
-    if (finalResult) {
-      const replyHtml = buildReply(finalResult);
-      const msgEl = appendBubble('ai', replyHtml, true);
-      autoExpandThinking(msgEl, finalResult);
-      pushMessage('ai', replyHtml);
-    } else {
-      appendBubble('ai', '❌ 未收到有效回复');
-      pushMessage('ai', '❌ 未收到有效回复');
+    const replyHtml = buildReply(data);
+    const msgEl = appendBubble('ai', replyHtml, true);
+    // 只要有工具参与（tool list 非空），自动展开思考过程
+    if (selectedTools.length > 0 || data.mode === 'react' || data.mode === 'tool' || data.mode === 'rag') {
+      const body = msgEl.querySelector('.think-body');
+      const hdr  = msgEl.querySelector('.think-header');
+      if (body) body.classList.add('open');
+      if (hdr)  hdr.classList.add('open');
     }
-
+    pushMessage('ai', replyHtml);
   } catch(e) {
-    if (e.name === 'AbortError') {
-      typingRow.remove();
-      const cancelMsg = '⏹ 已中断';
-      appendBubble('ai', cancelMsg);
-      pushMessage('ai', cancelMsg);
-    } else {
-      typingRow.remove();
-      const err = '❌ 请求失败，请检查服务是否正常运行。';
-      appendBubble('ai', err);
-      pushMessage('ai', err);
-    }
+    typingRow.remove();
+    const err = '❌ 请求失败，请检查服务是否正常运行。';
+    appendBubble('ai', err);
+    pushMessage('ai', err);
   } finally {
-    setLoadingState(false);
-    window._chatAbortCtrl = null;
-  }
-}
-
-function autoExpandThinking(msgEl, data) {
-  if (selectedTools.length > 0 || data.mode === 'react' || data.mode === 'tool' || data.mode === 'rag') {
-    const body = msgEl.querySelector('.think-body');
-    const hdr  = msgEl.querySelector('.think-header');
-    if (body) body.classList.add('open');
-    if (hdr)  hdr.classList.add('open');
+    isLoading = false;
+    document.getElementById('sendBtn').disabled = false;
   }
 }
 

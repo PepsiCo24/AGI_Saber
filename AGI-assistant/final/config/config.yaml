@@ -1,0 +1,56 @@
+llm:
+  api_url: https://api.example.com/v3/chat/completions
+  api_key: "your-llm-api-key-here"
+  model: your-llm-model-name
+  temperature: 0.7
+
+embedding:
+  api_url: https://api.example.com/v3/embeddings
+  api_key: "your-embedding-api-key-here"
+  model: your-embedding-model-name
+
+milvus:
+  host: localhost
+  port: 19530
+
+postgres:
+  host: localhost
+  port: 5432
+  user: your-db-user
+  password: your-db-password
+  database: your-db-name
+
+elasticsearch:
+  addresses:
+    - http://localhost:9200
+  username: elastic
+  password: your-es-password
+
+kafka:
+  brokers:
+    - localhost:29092
+  topic: agent-events
+
+rag:
+  chunk_size: 200
+  chunk_overlap: 50
+  top_k: 3
+
+memory:
+  short_term_max_turns: 5
+  long_term_top_k: 3
+
+harness:
+  max_retries: 3
+  retry_delay_ms: 200
+  step_timeout_ms: 5000
+  max_iterations: 5
+
+server:
+  port: "8090"
+
+# 可选：接入 Tavily 搜索 API（https://tavily.com 免费额度 1000次/月）
+# 未填写时自动降级为 LLM 知识库回答
+search:
+  api_key: "your-tavily-api-key"
+  api_url:  "https://tavily.com"

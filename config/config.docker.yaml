@@ -1,0 +1,128 @@
+# Docker Compose 专用配置：host 字段使用 compose 服务名，
+# 容器内 DNS 自动解析（localhost 在容器内指容器自己，不可用）。
+# 本地 go run 时仍用 config/config.yaml（localhost）。
+llm:
+  api_url: https://open.bigmodel.cn/api/paas/v4/chat/completions
+  api_key: "."
+  model: glm-5.2
+  temperature: 1.0
+embedding:
+  api_url: https://open.bigmodel.cn/api/paas/v4/embeddings
+  api_key: "."
+  model: glm-5.2
+
+# 向量数据库配置
+milvus:
+  host: milvus
+  port: 19530
+
+# 关系型数据库配置
+postgres:
+  host: postgres
+  port: 5432
+  user: aiagent
+  password: aiagent123
+  database: aiagent
+
+elasticsearch:
+  addresses:
+    - http://elasticsearch:9200
+  username: elastic
+  password: changeme
+
+kafka:
+  brokers:
+    - kafka:9092
+  topic: agent-events
+
+#rag策略
+rag:
+  chunk_size: 200
+  chunk_overlap: 50
+  top_k: 3
+  rrf_constant_k: 60
+  semantic_weight: 0.7
+  enable_hybrid_search: true
+  rag_milvus_dim: 2048
+
+memory:
+  short_term_max_turns: 5
+  long_term_top_k: 3
+  consolidation:
+    similarity_threshold: 0.80
+    dedup_threshold: 0.95
+    ttl_days: 30
+    decay_rate: 0.995
+    min_importance: 0.3
+    trigger_interval: 5
+
+harness:
+  max_retries: 3
+  retry_delay_ms: 200
+  step_timeout_ms: 5000
+  max_iterations: 5
+
+server:
+  port: "8090"
+
+search:
+  api_key: "填入自己的api"
+  api_url: "https://tavily.com"
+
+# ===== 知识图谱（Neo4j）=====
+neo4j:
+  uri: "bolt://neo4j:7687"
+  user: "neo4j"
+  password: "password123"
+  max_hops: 2
+  weight: 0.3
+  enabled: true
+
+# ===== 沙箱执行 =====
+# 容器内没装 docker CLI，沙箱 backend 改为 mock 避免启动期 probe 失败拖慢。
+# 真要在容器内跑 docker 沙箱需要挂 /var/run/docker.sock 并安装 docker CLI。
+sandbox:
+  enabled: true
+  backend: "mock"
+  image: "ubuntu:22.04"
+  timeout_ms: 30000
+  max_output_bytes: 65536
+  memory_limit_mb: 256
+  cpu_percent: 50
+  max_pids: 64
+  network_disabled: true
+  readonly_rootfs: true
+
+security:
+  max_command_length: 500
+  allowlist_mode: false
+  allowlist:
+    - "ls"
+    - "cat"
+    - "echo"
+    - "pwd"
+    - "date"
+    - "python3"
+    - "node"
+    - "go"
+    - "java"
+
+# ===== 图运行时（ReAct 并行调度 + 竞速）=====
+graph_runtime:
+  max_parallel: 2
+  race_timeout_ms: 30000
+  enable_racing: true
+
+# ===== 认证 / JWT =====
+# JWT_SECRET 必须 ≥32 字节随机；通过 docker-compose environment 从 .env 注入；
+# 缺失时启动会 Fatal："JWT secret 至少需 32 字节"。
+auth:
+  jwt_secret: "${JWT_SECRET}"
+  jwt_ttl_hours: 168          # 7 天
+  jwt_issuer: "agi-assistant"
+
+# ===== 观测性（当前仅 pprof）=====
+observability:
+  pprof:
+    enabled: false
+    admin_token: "${PPROF_ADMIN_TOKEN}"

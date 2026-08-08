@@ -1,0 +1,35 @@
+# AGI-saber 前端 nginx 部署示例（独立端口，前后端分离）
+# 用法：
+#   1) npm run build 产出 web/dist
+#   2) 把 dist 部署到下方 root 路径
+#   3) 反代 /api 到后端 :8090（同源，前端无需配 VITE_API_BASE、无 CORS 问题）
+#   4) nginx -s reload
+
+server {
+    listen       8080;            # 前端独立端口
+    server_name  localhost;
+
+    root   /path/to/AGI-AI-assitant/web/dist;
+    index  index.html;
+
+    # SPA 路由回退：非静态资源一律回 index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 反代到后端（含 SSE：关闭缓冲 + 拉长超时）
+    location /api/ {
+        proxy_pass         http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+
+        # SSE（/api/chat/stream）必须关闭代理缓冲，否则前端收不到增量 token
+        proxy_buffering    off;
+        proxy_cache        off;
+        proxy_read_timeout 600s;   # 长任务（rag_agent 子 Agent 链可能数分钟）
+    }
+
+    location = /healthz { proxy_pass http://127.0.0.1:8090; }
+    location = /readyz  { proxy_pass http://127.0.0.1:8090; }
+}

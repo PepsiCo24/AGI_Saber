@@ -1,44 +1,73 @@
+# 对话模型配置
 llm:
-  api_url: https://api.example.com/v3/chat/completions
-  api_key: "your-llm-api-key-here"
-  model: your-llm-model-name
-  temperature: 0.7
-
+  api_url: https://open.bigmodel.cn/api/paas/v4/chat/completions
+  api_key: "."
+  model: glm-5.1
+  # 快模型：规划/参数抽取/子Agent/RAG改写精排等内部步骤用它提速；最终答案仍用 model。
+  # 留空则回落为 model（无行为变化）。
+  fast_model: glm-4.7-flash
+  temperature: 1.0
 embedding:
-  api_url: https://api.example.com/v3/embeddings
-  api_key: "your-embedding-api-key-here"
-  model: your-embedding-model-name
+  api_url: https://open.bigmodel.cn/api/paas/v4/embeddings
+  api_key: "."
+  model: embedding-3
 
+# 向量数据库配置
 milvus:
   host: localhost
   port: 19530
 
+# 关系型数据库配置
 postgres:
   host: localhost
   port: 5432
-  user: your-db-user
-  password: your-db-password
-  database: your-db-name
+  user: aiagent
+  password: aiagent123
+  database: aiagent
 
 elasticsearch:
   addresses:
     - http://localhost:9200
   username: elastic
-  password: your-es-password
+  password: changeme
 
 kafka:
   brokers:
     - localhost:29092
   topic: agent-events
 
+#rag策略
 rag:
   chunk_size: 200
   chunk_overlap: 50
   top_k: 3
+  rrf_constant_k: 60
+  semantic_weight: 0.7
+  enable_hybrid_search: true
+  rag_milvus_dim: 2048
+
+  # Query Rewrite：history-aware + multi-query
+  # 多轮指代消除 + 单查询召回扩展，对短/口语化 query 收益最大
+  rewrite:
+    enabled: true
+    num_queries: 3        # 含原查询在内的目标改写条数
+
+  # Rerank：LLM listwise 精排
+  # 召回阶段会自动扩大到 4*top_k，rerank 后再截回 top_k
+  rerank:
+    enabled: true
+    preview_len: 200      # 给 reranker 看的每条候选最大字符数
 
 memory:
   short_term_max_turns: 5
   long_term_top_k: 3
+  consolidation:
+    similarity_threshold: 0.80   # 合并阈值：超过此相似度的记忆会被合并
+    dedup_threshold: 0.95        # 去重阈值：超过此相似度的记忆视为重复
+    ttl_days: 30                 # 过期天数：超过此天数的低重要性记忆会被淘汰
+    decay_rate: 0.995            # 每日衰减系数（0.995 = 每天保留 99.5%）
+    min_importance: 0.3          # 低于此重要性 + 超 TTL 的记忆会被淘汰
+    trigger_interval: 5          # 每存入 N 条新记忆后触发合并
 
 harness:
   max_retries: 3
@@ -49,8 +78,83 @@ harness:
 server:
   port: "8090"
 
-# 可选：接入 Tavily 搜索 API（https://tavily.com 免费额度 1000次/月）
-# 未填写时自动降级为 LLM 知识库回答
 search:
-  api_key: "your-tavily-api-key"
-  api_url:  "https://tavily.com"
+  api_key: "."               # 请填入你的 Tavily API Key（可选）
+  api_url: "https://tavily.com"
+
+# ===== 知识图谱（Neo4j，可选，不可用时跳过图检索）=====
+neo4j:
+  uri: "bolt://localhost:7687"
+  user: "neo4j"
+  password: "password123"
+  max_hops: 2        # 图遍历最大跳数
+  weight: 0.3        # 图检索在 RRF 融合中的权重
+  enabled: true      # false 时完全跳过知识图谱
+
+# ===== 沙箱执行（用于输出产物）=====
+sandbox:
+  enabled: true
+  backend: "docker"     # "docker" | "local" | "mock"
+  image: "ubuntu:22.04"
+  timeout_ms: 30000
+  max_output_bytes: 65536
+  memory_limit_mb: 256
+  cpu_percent: 50
+  max_pids: 64
+  network_disabled: true
+  readonly_rootfs: true
+  # loop 产物根目录（宿主机路径，支持 ~）；每次请求在其下按 {userID}/{taskID} 建子目录，
+  # 挂载到沙箱 /workspace，生成的报告/作业等文件会出现在这里（默认桌面）。
+  artifact_host_dir: "~/Desktop/agi-saber"
+
+# ===== 命令安全校验 =====
+security:
+  max_command_length: 500
+  allowlist_mode: false  # true = 白名单模式，只允许明确列出的命令
+  allowlist:
+    - "ls"
+    - "cat"
+    - "echo"
+    - "pwd"
+    - "date"
+    - "python3"
+    - "node"
+    - "go"
+    - "java"
+
+# ===== 图运行时（ReAct 并行调度 + 竞速 + Replan）=====
+graph_runtime:
+  max_parallel: 2            # 最大并行执行节点数
+  race_timeout_ms: 30000     # 竞速组内节点超时
+  enable_racing: true        # 是否启用竞速机制（First-success-wins）
+  replan_enabled: true       # 每层执行完让 LLM 看观察 → 决定追加/替换节点（Plan-and-ReAct）
+  max_replan: 2              # 单次任务最多 replan 次数上限，防止死循环
+  replan_on_failed: true     # 节点失败时触发局部 replan（补一个替代节点）
+
+# ===== 认证 / JWT =====
+# 生产环境强制通过环境变量 JWT_SECRET 注入，至少 32 字节随机
+# 本地开发可以直接写一段固定字符串（≥ 32 字符）方便调试
+auth:
+  jwt_secret: "${JWT_SECRET}"
+  jwt_ttl_hours: 168          # access token 有效期：7 天
+  jwt_issuer: "agi-assistant"
+
+# ===== 观测性（当前仅 pprof）=====
+# pprof 会暴露 goroutine 栈、堆、CPU profile 等内部信息，
+# 生产环境默认关闭；开发/排障时打开需同时通过 admin_token 才能访问。
+observability:
+  pprof:
+    enabled: false
+    admin_token: "${PPROF_ADMIN_TOKEN}"    # 开启时必须配置；启动期强制校验
+
+# ===== Skill 广场（GitHub 办公类 skill 爬取）=====
+# enabled=false 时广场只展示内置精选，不访问 GitHub。
+# github_token 可选，用于提升 GitHub 搜索 API 配额（匿名仅 10 次/分钟，配 token 后 30 次/分钟）。
+# keyword 是 GitHub 全文搜索词：多个词是「AND」关系，词越多命中越少，
+#   建议 1-2 个词（如 "office assistant" / "office mcp" / "productivity"），
+#   写太长（如 "office productivity assistant prompt"）会返回 0 条结果。
+skillhub:
+  enabled: true
+  github_token: "${GITHUB_TOKEN}"
+  keyword: "office assistant"
+  cache_ttl_min: 30

@@ -1,20 +1,22 @@
-# Go 编译产物
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# Build artifacts
 /final-agent
-
-# 测试缓存
+/bin/
+/dist/
 *.test
 *.out
+.data/
 
 # IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+/.idea/
+/.vscode/
+/.worktrees/
 
-# macOS
+# OS
 .DS_Store
+
+# Logs
+*.log
+
+# Local env overrides
+.env
+.env.local

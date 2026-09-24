@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 助手</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-from:    #fff5f7;
+  --bg-to:      #f0e6ff;
+  --sidebar:    rgba(255,255,255,0.65);
+  --card:       rgba(255,255,255,0.72);
+  --card-solid: #ffffff;
+  --border:     rgba(196,181,253,0.30);
+  --border2:    rgba(249,168,212,0.20);
+  --text:       #3d3250;
+  --text2:      #6b5b7b;
+  --text3:      #a89bb5;
+  --primary:    #c4b5fd;
+  --primary-d:  #a78bfa;
+  --pink:       #f9a8d4;
+  --pink-d:     #f472b6;--pink-l:     #fce7f3;
+  --green:      #6ee7b7;
+  --green-l:    #d1fae5;
+  --amber:      #fbbf24;
+  --amber-l:    #fef3c7;
+  --red:        #fb7185;
+  --red-l:      #ffe4e6;
+  --blue:       #93c5fd;
+  --blue-l:     #dbeafe;
+  --shadow-pink:  0 4px 20px rgba(249,168,212,0.18);
+  --shadow-purple:0 4px 20px rgba(196,181,253,0.18);
+  --shadow-soft:  0 2px 12px rgba(160,130,200,0.10);
+  --radius-sm:  10px;
+  --radius-md:  16px;
+  --radius-lg:  22px;
+  --radius-pill: 999px;
+}
+
+body {
+  font-family: "Hiragino Sans", "Yu Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 50%, #ede9fe 100%);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+  font-size: 14px;
+  position: relative;
+}
+
+/* ── 背景装饰 ── */
+.bg-decor {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.bg-decor .star {
+  position: absolute;
+  font-size: 10px;
+  opacity: 0;
+  animation: twinkle 4s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%,100% { opacity: 0; transform: scale(0.5); }
+  50%     { opacity: 0.7; transform: scale(1.2); }
+}
+.bg-decor .sakura {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0;
+  animation: sakuraFall linear infinite;
+}
+@keyframes sakuraFall {
+  0%   { opacity: 0; transform: translateY(-20px) rotate(0deg) translateX(0); }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.4; }
+  100% { opacity: 0; transform: translateY(100vh) rotate(720deg) translateX(80px); }
+}
+
+/* ── scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: var(--pink); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ════════════════════════════════════
+   SIDEBAR
+════════════════════════════════════ */
+.sidebar {
+  width: 270px;
+  min-width: 270px;
+  background: var(--sidebar);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo */
+.sidebar-logo {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-mark {
+  width: 42px; height: 42px;
+  background: linear-gradient(135deg, var(--pink) 0%, var(--primary) 100%);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-pink);
+  animation: logoPulse 3s ease-in-out infinite;
+}
+@keyframes logoPulse {
+  0%,100% { box-shadow: 0 4px 16px rgba(249,168,212,0.25); }
+  50%     { box-shadow: 0 4px 24px rgba(249,168,212,0.45); }
+}
+.logo-name  { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 0.3px; }
+.logo-sub   { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: 0.5px; }
+
+/* Section labels */
+.sec-label {
+  padding: 16px 18px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--pink-d);
+  text-transform: uppercase;
+}
+
+/* ── 私人黑洞 ── */
+.blackhole {
+  padding: 0 14px 14px;
+  flex-shrink: 0;
+}
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+  background: rgba(255,255,255,0.4);
+}
+.upload-zone:hover { border-color: var(--pink); background: rgba(249,168,212,0.08); box-shadow: var(--shadow-pink); }
+.upload-zone.drag  { border-color: var(--pink-d); background: rgba(249,168,212,0.12); box-shadow: var(--shadow-pink); }
+.upload-zone .uz-icon { font-size: 24px; margin-bottom: 4px; }
+.upload-zone .uz-text { font-size: 12px; color: var(--text2); font-weight: 500; }
+.upload-zone .uz-sub  { font-size: 11px; color: var(--text3); margin-top: 3px; }
+#fileInput { display: none; }
+
+.doc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.library-panel {
+  padding-bottom: 10px;
+  max-height: 170px;
+  overflow-y: auto;
+  border-bottom: 1px solid rgba(196,181,253,0.16);
+}
+.doc-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  background: rgba(255,255,255,0.5);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  transition: background .15s;
+  cursor: pointer;
+}
+.doc-item:hover { background: rgba(255,255,255,0.8); }
+.doc-item .doc-icon { color: var(--pink-d); font-size: 13px; }
+.doc-item .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-item .doc-chunks { color: var(--text3); font-size: 11px; flex-shrink: 0; }
+.doc-item .doc-del { cursor: pointer; color: #c4b0c8; font-size: 16px; font-weight: bold; line-height: 1; padding: 0 4px; border-radius: 6px; flex-shrink: 0; transition: color .15s, background .15s; }
+.doc-item .doc-del:hover { color: var(--red); background: var(--red-l); }
+.doc-item .doc-ingest { cursor: pointer; color: var(--primary-d); font-size: 13px; padding: 1px 5px; border-radius: 6px; flex-shrink: 0; transition: color .15s, background .15s; }
+.doc-item .doc-ingest:hover { color: var(--pink-d); background: var(--pink-l); }
+.doc-empty { font-size: 11px; color: var(--text3); padding: 7px 2px; line-height: 1.5; }
+.sec-label-row { display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
+.mini-refresh { border: 1px solid var(--border); background: rgba(255,255,255,.45); color: var(--text2); border-radius: 8px; padding: 2px 7px; font-size: 11px; cursor: pointer; }
+.mini-refresh:hover { border-color: var(--pink); color: var(--pink-d); }
+
+/* ── 近期对话 ── */
+.recent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.session-item {
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+  border: 1px solid transparent;
+  display: flex; align-items: center; gap: 8px;
+}
+.session-item:hover  { background: rgba(255,255,255,0.5); }
+.session-item.active { background: rgba(249,168,212,0.12); border-color: var(--border2); box-shadow: var(--shadow-soft); }
+.sess-dot { font-size: 10px; flex-shrink: 0; }
+.sess-info  { flex: 1; min-width: 0; }
+.sess-title { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-meta  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.sess-empty { font-size: 12px; color: var(--text3); padding: 10px 4px; }
+.sess-del {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text3);
+  opacity: 0;
+  transition: opacity .15s, background .15s, color .15s;
+}
+.session-item:hover .sess-del { opacity: 1; }
+.sess-del:hover { background: var(--red-l); color: var(--red); }
+
+/* New chat button */
+.new-chat-btn {
+  margin: 0 14px 14px;
+  padding: 10px;
+  background: linear-gradient(135deg, var(--pink) 0%, var(--primary) 100%);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: calc(100% - 28px);
+  transition: box-shadow .2s, transform .15s;
+  box-shadow: var(--shadow-pink);
+  letter-spacing: 0.3px;
+}
+.new-chat-btn:hover { box-shadow: 0 6px 24px rgba(249,168,212,0.35); transform: translateY(-1px); }
+.new-chat-btn:active { transform: translateY(0); }
+
+/* ════════════════════════════════════
+   MAIN
+════════════════════════════════════ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Controls bar ── */
+.controls-bar {
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  /* 提升 stacking context，确保 .tool-picker 下拉浮在消息气泡之上。
+     旧实现里 .tool-picker 自己 z-index:100 但父级 .controls-bar 没设
+     position/z-index，导致部分浏览器把它和 .messages 视作同层，下拉被气泡遮住。 */
+  position: relative;
+  z-index: 50;
+}
+
+/* RAG toggle */
+.rag-toggle-wrap {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.rag-toggle-wrap:hover { border-color: var(--pink); box-shadow: var(--shadow-pink); }
+.rag-toggle-wrap.on    { border-color: var(--pink-d); background: rgba(249,168,212,0.10); box-shadow: var(--shadow-pink); }
+.toggle-pill {
+  width: 32px; height: 18px;
+  background: linear-gradient(135deg, #e2d6f0, #d4c5e8);
+  border-radius: 9px;
+  position: relative;
+  transition: background .25s;
+  flex-shrink: 0;
+}
+.rag-toggle-wrap.on .toggle-pill { background: linear-gradient(135deg, var(--pink), var(--pink-d)); }
+.toggle-pill::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: left .25s;
+  box-shadow: 0 1px 4px rgba(160,130,200,0.25);
+}
+.rag-toggle-wrap.on .toggle-pill::after { left: 16px; }
+.toggle-label { font-size: 12px; font-weight: 600; color: var(--text2); }
+.rag-toggle-wrap.on .toggle-label { color: var(--pink-d); }
+
+/* Tools button */
+.tools-btn-wrap { position: relative; }
+.tools-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px; font-weight: 600;
+  color: var(--text2);
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.tools-btn:hover { border-color: var(--primary-d); box-shadow: var(--shadow-purple); }
+.tools-btn.active { border-color: var(--primary-d); background: rgba(196,181,253,0.12); color: var(--primary-d); box-shadow: var(--shadow-purple); }
+.tools-btn .tool-count {
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Tool picker dropdown */
+.tool-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: var(--card-solid);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(160,130,200,0.18);
+  padding: 10px;
+  min-width: 260px;
+  z-index: 100;
+  display: none;
+}
+.tool-picker.open { display: block; animation: pickerIn .2s ease-out; }
+@keyframes pickerIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.picker-title { font-size: 10px; font-weight: 700; color: var(--pink-d); text-transform: uppercase; letter-spacing: .8px; padding: 4px 8px 8px; }
+.picker-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .12s;
+}
+.picker-item:hover { background: rgba(196,181,253,0.08); }
+.picker-item input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--pink-d); cursor: pointer; flex-shrink: 0; }
+.picker-item-icon { font-size: 18px; }
+.picker-item-info .p-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.picker-item-info .p-desc { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.picker-item-mcp { font-size: 9px; font-weight: 700; background: var(--pink-l); color: var(--pink-d); border-radius: 6px; padding: 1px 5px; margin-left: 4px; }
+
+/* MCP add form */
+.picker-divider { height: 1px; background: var(--border); margin: 8px 0; }
+.mcp-add-btn {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 8px 10px;
+  border: none; background: none;
+  border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--primary-d);
+  transition: background .12s;
+}
+.mcp-add-btn:hover { background: rgba(196,181,253,0.10); }
+.mcp-form { display: none; padding: 8px 4px 4px; flex-direction: column; gap: 6px; }
+.mcp-form.open { display: flex; }
+.mcp-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255,255,255,0.6);
+  outline: none;
+  font-family: inherit;
+  transition: border-color .2s, box-shadow .2s;
+}
+.mcp-input:focus { border-color: var(--primary-d); box-shadow: 0 0 0 3px rgba(196,181,253,0.15); }
+.mcp-submit {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+  color: #fff; border: none;
+  border-radius: 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer; align-self: flex-end;
+  transition: box-shadow .2s;
+  box-shadow: var(--shadow-pink);
+}
+.mcp-submit:hover { box-shadow: 0 4px 16px rgba(249,168,212,0.35); }
+
+.controls-right { margin-left: auto; font-size: 12px; color: var(--text3); font-weight: 500; }
+
+/* ── Messages ── */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Welcome */
+.welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; text-align: center; padding: 40px;
+}
+.welcome-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  animation: welcomeFloat 3s ease-in-out infinite;
+}
+@keyframes welcomeFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-8px); }
+}
+.welcome-title { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.welcome-desc  { font-size: 14px; color: var(--text2); line-height: 1.8; max-width: 400px; }
+
+/* Message rows */
+.msg-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  animation: bubbleIn .35s ease-out;
+}
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-row.user { flex-direction: row-reverse; }
+
+.avatar {
+  width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.avatar.ai   { background: linear-gradient(135deg, var(--primary), #ddd6fe); box-shadow: var(--shadow-purple); }
+.avatar.user { background: linear-gradient(135deg, var(--pink), #fbcfe8); box-shadow: var(--shadow-pink); }
+
+.msg-body { max-width: 68%; display: flex; flex-direction: column; gap: 4px; }
+.msg-row.user .msg-body { align-items: flex-end; }
+
+.msg-name { font-size: 11px; color: var(--text3); padding: 0 4px; font-weight: 500; }
+
+.bubble {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  line-height: 1.7;
+  word-break: break-word;
+}
+.bubble.ai {
+  background: var(--card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-top-left-radius: 6px;
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+.bubble.user {
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+  color: #fff;
+  border-top-right-radius: 6px;
+  box-shadow: var(--shadow-pink);
+}
+
+/* Typing indicator */
+.typing { display: flex; gap: 5px; padding: 6px 2px; align-items: center; }
+.typing span {
+  width: 8px; height: 8px; border-radius: 50%;
+  animation: typeBounce 1.4s ease-in-out infinite;
+}
+.typing span:nth-child(1) { background: var(--pink); animation-delay: 0s; }
+.typing span:nth-child(2) { background: var(--primary); animation-delay: .2s; }
+.typing span:nth-child(3) { background: var(--pink); animation-delay: .4s; }
+@keyframes typeBounce {
+  0%,60%,100% { transform: translateY(0); opacity: .5; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ════════════════════════════════════
+   THINKING PROCESS
+════════════════════════════════════ */
+.think-wrap {
+  margin-bottom: 8px;
+}
+
+/* Collapsible header */
+.think-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+}
+.think-icon {
+  font-size: 14px;
+  transition: transform .25s;
+}
+.think-header.open .think-icon { transform: rotate(90deg); }
+.think-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: .3px;
+}
+.think-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+.badge-react  { background: rgba(196,181,253,0.2); color: var(--primary-d); }
+.badge-tool   { background: var(--amber-l); color: #d97706; }
+.badge-rag    { background: var(--green-l); color: #059669; }
+.badge-memory { background: var(--blue-l); color: #2563eb; }
+
+/* Steps body */
+.think-body {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.think-body.open { display: flex; }
+
+/* Individual step */
+.step-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(196,181,253,0.12);
+}
+.step-row:last-child { border-bottom: none; }
+.step-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  min-width: 60px;
+  text-align: center;
+  margin-top: 1px;
+}
+.step-thought     { background: rgba(196,181,253,0.2); color: var(--primary-d); }
+.step-action      { background: rgba(249,168,212,0.18); color: #be185d; }
+.step-observation { background: var(--green-l); color: #065f46; }
+.step-final       { background: var(--amber-l); color: #92400e; }
+
+.step-content { flex: 1; color: var(--text2); line-height: 1.55; word-break: break-all; }
+.step-params  { margin-top: 3px; font-size: 11px; color: var(--text3); font-family: monospace; }
+
+/* Tool call block */
+.tool-call-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tool-call-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.tool-call-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  min-width: 44px;
+  padding-top: 1px;
+}
+.tool-call-val { color: var(--text2); word-break: break-all; }
+.tool-call-result { color: var(--text); }
+
+/* RAG sources */
+.rag-sources { display: flex; flex-direction: column; gap: 5px; }
+.rag-chunk {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.55;
+}
+.rag-chunk .rag-chunk-score {
+  font-size: 10px;
+  color: var(--primary-d);
+  float: right;
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+/* Memory note */
+.memory-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #2563eb;
+  background: var(--blue-l);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  border: 1px solid rgba(147,197,253,0.3);
+}
+
+.answer-text {
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* Local document viewer */
+.doc-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(61,50,80,0.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.doc-viewer-backdrop.open { display: flex; }
+.doc-viewer {
+  width: min(900px, 100%);
+  max-height: min(760px, calc(100vh - 56px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,0.94);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 60px rgba(87,69,120,0.22);
+  overflow: hidden;
+}
+.doc-viewer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.doc-viewer-title-wrap { flex: 1; min-width: 0; }
+.doc-viewer-kicker {
+  font-size: 10px;
+  color: var(--pink-d);
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.doc-viewer-title {
+  font-size: 18px;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.doc-viewer-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text3);
+}
+.doc-viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.doc-viewer-action,
+.doc-viewer-close {
+  height: 32px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.7);
+  color: var(--text2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.doc-viewer-action {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.doc-viewer-close {
+  width: 32px;
+  font-size: 18px;
+  line-height: 1;
+}
+.doc-viewer-action:hover,
+.doc-viewer-close:hover { border-color: var(--pink); color: var(--pink-d); background: rgba(249,168,212,0.08); }
+.doc-viewer-action:disabled { opacity: .5; cursor: default; }
+.doc-viewer-body {
+  overflow-y: auto;
+  padding: 20px;
+}
+.doc-viewer-content {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Progress indicator */
+.progress-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  background: linear-gradient(135deg, rgba(249,168,212,0.15), rgba(196,181,253,0.15));
+  border-radius: var(--radius-pill);
+  font-size: 12px; color: var(--pink-d);
+  font-weight: 600;
+  margin-bottom: 6px;
+  border: 1px solid var(--border2);
+}
+.progress-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--pink);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.interrupted-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  background: var(--red-l); color: var(--red);
+  font-size: 11px; font-weight: 600;
+  margin-bottom: 6px;
+  border: 1px solid rgba(251,113,133,0.2);
+}
+
+.completion-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  background: var(--green-l); color: #059669;
+  font-size: 11px; font-weight: 600;
+  margin-bottom: 6px;
+  border: 1px solid rgba(16,185,129,0.22);
+}
+
+/* ── Input area ── */
+.input-area {
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+  padding: 14px 22px 18px;
+}
+.input-row {
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.input-box {
+  flex: 1;
+  background: rgba(255,255,255,0.6);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 11px 16px;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  resize: none;
+  min-height: 46px;
+  max-height: 140px;
+  line-height: 1.5;
+  font-family: inherit;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+  overflow-y: auto;
+}
+.input-box:focus { border-color: var(--primary-d); box-shadow: 0 0 0 4px rgba(196,181,253,0.15); background: rgba(255,255,255,0.85); }
+.input-box::placeholder { color: var(--text3); }
+
+.send-btn {
+  width: 46px; height: 46px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--pink) 0%, var(--primary) 100%);
+  border: none; border-radius: 14px;
+  color: #fff; font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-pink);
+  transition: box-shadow .2s, transform .15s;
+}
+.send-btn:hover   { box-shadow: 0 6px 24px rgba(249,168,212,0.4); transform: translateY(-1px); }
+.send-btn:active  { transform: translateY(0) scale(.96); }
+.send-btn:disabled { opacity: .4; cursor: default; transform: none; box-shadow: none; }
+.send-btn.stop {
+  background: linear-gradient(135deg, var(--red), #e11d48);
+  box-shadow: 0 4px 16px rgba(251,113,133,0.35);
+  animation: pulse-stop 1.5s infinite;
+}
+@keyframes pulse-stop {
+  0%, 100% { box-shadow: 0 4px 16px rgba(251,113,133,0.35); }
+  50% { box-shadow: 0 6px 24px rgba(251,113,133,0.55); }
+}
+
+.input-hint { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; min-height: 24px; overflow: visible; }
+.hint-chip {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.5);
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s, box-shadow .15s;
+  user-select: none;
+}
+.hint-chip:hover { border-color: var(--pink); color: var(--pink-d); background: rgba(249,168,212,0.06); box-shadow: var(--shadow-soft); }
+</style>
+</head>
+<body>
+
+<!-- 背景装饰 -->
+<div class="bg-decor" id="bgDecor"></div>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">AI</div>
+    <div>
+      <div class="logo-name">AI</div>
+      <div class="logo-sub">輕小說風 · 六合一</div>
+    </div>
+  </div>
+
+  <!-- 私人黑洞 -->
+  <div class="sec-label"> 私人黑洞</div>
+  <div class="blackhole">
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="uz-icon">✦</div>
+      <div class="uz-text">上传个人文件</div>
+      <div class="uz-sub">点击或拖拽到此处</div>
+    </div>
+    <input type="file" id="fileInput" accept=".txt,.md,.pdf" multiple>
+    <div class="doc-list" id="docList"></div>
+  </div>
+
+  <div class="sec-label sec-label-row">
+    <span> 本地文档库</span>
+    <button class="mini-refresh" type="button" onclick="loadLibraryDocs(event)">刷新</button>
+  </div>
+  <div class="blackhole library-panel">
+    <div class="doc-list" id="libraryDocList"></div>
+  </div>
+
+  <!-- 近期对话 -->
+  <div class="sec-label"> 近期对话</div>
+  <div class="recent" id="sessionList">
+    <div class="sess-empty">暂无对话记录</div>
+  </div>
+
+  <button class="new-chat-btn" onclick="newSession()">✨ 新建对话</button>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<div class="main">
+
+  <!-- Controls -->
+  <div class="controls-bar">
+    <div class="rag-toggle-wrap" id="ragToggle" onclick="toggleRAG()">
+      <div class="toggle-pill"></div>
+      <span class="toggle-label">📚 知识库</span>
+    </div>
+
+    <div class="tools-btn-wrap" id="toolsBtnWrap">
+      <div class="tools-btn" id="toolsBtn" onclick="toggleToolPicker()">
+        <span>✨</span>
+        <span>工具</span>
+        <span class="tool-count" id="toolCount" style="display:none">0</span>
+      </div>
+      <div class="tool-picker" id="toolPicker">
+        <div class="picker-title">选择工具（支持多选）</div>
+        <div id="pickerItems"></div>
+        <div class="picker-divider"></div>
+        <button class="mcp-add-btn" onclick="toggleMCPForm()">＋ 接入 MCP 工具</button>
+        <div class="mcp-form" id="mcpForm">
+          <input class="mcp-input" id="mcpName"     placeholder="工具名称（英文，如 my_tool）">
+          <input class="mcp-input" id="mcpDesc"     placeholder="工具描述">
+          <input class="mcp-input" id="mcpEndpoint" placeholder="HTTP 端点（如 http://host/tool）">
+          <button class="mcp-submit" onclick="submitMCPTool()">注册</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-right" id="modeHint">💬 直接对话模式</div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">✦</div>
+      <div class="welcome-title">你好，有什么我能帮你的？</div>
+      <div class="welcome-desc">✨ 开启知识库可检索你上传的文件；选择工具后，我会自动推理并调用它们完成任务。</div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-row">
+      <textarea class="input-box" id="input" placeholder="输入消息，Enter 发送，Shift+Enter 换行…" rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="handleSendBtn()">✨</button>
+    </div>
+    <div class="input-hint">
+      <span class="hint-chip" onclick="qs('你是谁？')"> 你是谁</span>
+      <span class="hint-chip" onclick="qs('现在几点？')">🕐 现在几点</span>
+      <span class="hint-chip" onclick="qs('北京天气怎么样？')">🌤️ 北京天气</span>
+      <span class="hint-chip" onclick="qs('我喜欢周杰伦的音乐')">💜 记住偏好</span>
+      <span class="hint-chip" onclick="qs('执行lscpu命令查看CPU信息')">💻 终端命令</span>
+    </div>
+  </div>
+</div>
+
+<!-- Local document viewer -->
+<div class="doc-viewer-backdrop" id="docViewer" onclick="closeDocumentViewer(event)">
+  <section class="doc-viewer" role="dialog" aria-modal="true" aria-labelledby="docViewerTitle" onclick="event.stopPropagation()">
+    <div class="doc-viewer-head">
+      <div class="doc-viewer-title-wrap">
+        <div class="doc-viewer-kicker">本地文档库</div>
+        <div class="doc-viewer-title" id="docViewerTitle">本地文档</div>
+        <div class="doc-viewer-meta" id="docViewerMeta"></div>
+      </div>
+      <div class="doc-viewer-actions">
+        <button class="doc-viewer-action" id="docViewerIngest" type="button" onclick="ingestCurrentViewerDocument()">↻ 入库</button>
+        <button class="doc-viewer-close" type="button" aria-label="关闭文档" onclick="closeDocumentViewer()">×</button>
+      </div>
+    </div>
+    <div class="doc-viewer-body">
+      <pre class="doc-viewer-content" id="docViewerContent"></pre>
+    </div>
+  </section>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  Background Decorations
+// ══════════════════════════════════════════
+function initBgDecor() {
+  const el = document.getElementById('bgDecor');
+  const stars = ['✦','✧','⋆','·','✶'];
+  const sakuras = ['✦','✧','✶','⋆'];
+  // Floating stars
+  for (let i = 0; i < 18; i++) {
+    const s = document.createElement('span');
+    s.className = 'star';
+    s.textContent = stars[Math.floor(Math.random()*stars.length)];
+    s.style.left = Math.random()*100 + '%';
+    s.style.top = Math.random()*100 + '%';
+    s.style.animationDelay = Math.random()*4 + 's';
+    s.style.animationDuration = (3 + Math.random()*3) + 's';
+    s.style.fontSize = (8 + Math.random()*8) + 'px';
+    el.appendChild(s);
+  }
+  // Falling sakura
+  for (let i = 0; i < 8; i++) {
+    const s = document.createElement('span');
+    s.className = 'sakura';
+    s.textContent = sakuras[Math.floor(Math.random()*sakuras.length)];
+    s.style.left = Math.random()*100 + '%';
+    s.style.animationDelay = Math.random()*12 + 's';
+    s.style.animationDuration = (8 + Math.random()*8) + 's';
+    s.style.fontSize = (10 + Math.random()*8) + 'px';
+    el.appendChild(s);
+  }
+}
+initBgDecor();
+
+// ══════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════
+let ragOn = false;
+let selectedTools = [];
+let availableTools = [];
+let sessions = JSON.parse(localStorage.getItem('ai_sessions') || '[]');
+let currentId = null;
+let uploadedDocs = JSON.parse(localStorage.getItem('ai_docs') || '[]');
+let libraryDocs = [];
+let currentViewerDocId = null;
+let isLoading = false;
+
+// ══════════════════════════════════════════
+//  Session management
+// ══════════════════════════════════════════
+function newSession() {
+  const id = Date.now().toString();
+  sessions.unshift({ id, title: '新对话', messages: [], ts: Date.now() });
+  if (sessions.length > 5) sessions = sessions.slice(0, 5);
+  currentId = id;
+  saveSessions();
+  renderSessions();
+  clearMessages();
+}
+
+function switchSession(id) {
+  currentId = id;
+  renderSessions();
+  const sess = sessions.find(s => s.id === id);
+  if (!sess) return;
+  clearMessages();
+  sess.messages.forEach(m => appendBubble(m.role, m.html, true));
+}
+
+function saveSessions() {
+  localStorage.setItem('ai_sessions', JSON.stringify(sessions));
+}
+
+function curSession() {
+  return sessions.find(s => s.id === currentId);
+}
+
+function pushMessage(role, html) {
+  const sess = curSession();
+  if (!sess) return;
+  sess.messages.push({ role, html });
+  if (sess.messages.length === 1 && role === 'user') {
+    sess.title = html.replace(/<[^>]+>/g, '').slice(0, 20) || '新对话';
+  }
+  saveSessions();
+  renderSessions();
+}
+
+function deleteSession(e, id) {
+  e.stopPropagation();
+  sessions = sessions.filter(s => s.id !== id);
+  saveSessions();
+  if (currentId === id) {
+    currentId = sessions.length > 0 ? sessions[0].id : null;
+    clearMessages();
+    if (currentId) switchSession(currentId);
+  }
+  renderSessions();
+}
+
+function renderSessions() {
+  const el = document.getElementById('sessionList');
+  if (sessions.length === 0) {
+    el.innerHTML = '<div class="sess-empty">暂无对话记录</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => `
+    <div class="session-item ${s.id === currentId ? 'active' : ''}" onclick="switchSession('${s.id}')">
+      <span class="sess-dot">✦</span>
+      <div class="sess-info">
+        <div class="sess-title">${s.title}</div>
+        <div class="sess-meta">${new Date(s.ts).toLocaleDateString('zh', {month:'short', day:'numeric'})}</div>
+      </div>
+      <div class="sess-del" onclick="deleteSession(event, '${s.id}')" title="删除">✕</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  File upload
+// ══════════════════════════════════════════
+document.getElementById('fileInput').addEventListener('change', async e => {
+  for (const file of e.target.files) await uploadFile(file);
+  e.target.value = '';
+});
+
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', async e => {
+  e.preventDefault(); zone.classList.remove('drag');
+  for (const file of e.dataTransfer.files) await uploadFile(file);
+});
+
+async function uploadFile(file) {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: form
+    });
+    const res = await response.json();
+    if (!response.ok || res.success === false) {
+      const message = res.detail || res.message || `上传失败 (${response.status})`;
+      alert(message);
+      return;
+    }
+
+    const doc = {
+      name: file.name,
+      chunks: Number(res.chunk_count || 0),
+      indexed: res.indexed_count || 0,
+      parser: res.parser || '',
+      pages: res.pages || 0,
+      textChars: res.text_chars || 0,
+      needsOCR: !!res.needs_ocr,
+      docHash: res.doc_hash,
+      documentId: res.document && res.document.id,
+      versionId: res.version && res.version.id,
+      persisted: false,
+      ts: Date.now()
+    };
+    uploadedDocs = uploadedDocs.filter(d => d.name !== file.name);
+    uploadedDocs.unshift(doc);
+    localStorage.setItem('ai_docs', JSON.stringify(uploadedDocs));
+    renderDocs();
+    loadLibraryDocs();
+  } catch(e) {
+    console.error('上传失败', e);
+    alert('上传失败：' + e.message);
+  }
+}
+
+function renderDocs() {
+  const el = document.getElementById('docList');
+  if (uploadedDocs.length === 0) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0">暂无文档</div>';
+    return;
+  }
+  el.innerHTML = uploadedDocs.slice(0, 6).map(d => {
+    const delBtn = d.docHash
+      ? `<span class="doc-del" onclick="deleteDoc('${d.docHash}','${d.name}')" title="删除">×</span>`
+      : '';
+    const chunkLabel = d.needsOCR
+      ? '需 OCR'
+      : d.persisted
+        ? `v${d.version || 0}`
+        : `${d.chunks || 0} 块${d.indexed ? `/${d.indexed}` : ''}`;
+    const title = `${d.name}${d.pages ? ` · ${d.pages} 页` : ''}${d.textChars ? ` · ${d.textChars} 字` : ''}${d.parser ? ` · ${d.parser}` : ''}`;
+    return `
+    <div class="doc-item">
+      <span class="doc-icon">${d.needsOCR ? '!' : '✓'}</span>
+      <span class="doc-name" title="${title}">${d.name}</span>
+      <span class="doc-chunks">${chunkLabel}</span>
+      ${delBtn}
+    </div>`;
+  }).join('');
+}
+
+async function deleteDoc(docHash, name) {
+  if (!confirm('确定删除「' + name + '」？')) return;
+  try {
+    const res = await fetch('/api/docs/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doc_hash: docHash })
+    });
+    if (!res.ok) {
+      console.error('删除失败:', res.status);
+      return;
+    }
+    uploadedDocs = uploadedDocs.filter(d => d.docHash !== docHash);
+    localStorage.setItem('ai_docs', JSON.stringify(uploadedDocs));
+    renderDocs();
+  } catch(e) {
+    console.error('删除失败', e);
+  }
+}
+
+// ══════════════════════════════════════════
+//  Local document library
+// ══════════════════════════════════════════
+async function loadLibraryDocs(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  try {
+    const res = await fetchDocumentJSON('/api/documents');
+    libraryDocs = res.documents || [];
+    syncUploadedDocsFromLibrary();
+  } catch(e) {
+    libraryDocs = [];
+  }
+  renderDocs();
+  renderLibraryDocs();
+}
+
+function syncUploadedDocsFromLibrary() {
+  const uploads = libraryDocs
+    .filter(d => d && d.source === 'user_upload')
+    .map(d => {
+      const meta = d.latest_metadata || {};
+      return {
+        name: meta.filename || d.title || d.id || '上传文档',
+        chunks: null,
+        indexed: null,
+        parser: d.latest_parser || meta.parser || '',
+        pages: Number(meta.pages || 0),
+        textChars: Number(meta.text_chars || d.latest_content_chars || 0),
+        needsOCR: false,
+        docHash: '',
+        documentId: d.id || '',
+        versionId: d.latest_version_id || '',
+        version: Number(d.latest_version || 0),
+        persisted: true,
+        ts: Date.parse(d.updated_at || d.created_at || '') || Date.now(),
+      };
+    });
+  const byKey = new Map();
+  for (const d of uploadedDocs) {
+    if (!d || !d.name) continue;
+    const existingKey = d.documentId ? `doc:${d.documentId}` : `name:${d.name}`;
+    byKey.set(existingKey, d);
+  }
+  for (const d of uploads) {
+    if (!d || !d.name) continue;
+    const uploadKey = d.documentId ? `doc:${d.documentId}` : `name:${d.name}`;
+    byKey.set(uploadKey, d);
+  }
+  uploadedDocs = Array.from(byKey.values()).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  localStorage.setItem('ai_docs', JSON.stringify(uploadedDocs));
+}
+
+function renderLibraryDocs() {
+  const el = document.getElementById('libraryDocList');
+  if (!el) return;
+  if (libraryDocs.length === 0) {
+    el.innerHTML = '<div class="doc-empty">暂无本地文档。让 Agent 生成报告并保存后，会出现在这里。</div>';
+    return;
+  }
+  el.innerHTML = libraryDocs.slice(0, 8).map(d => `
+    <div class="doc-item" role="button" onclick="viewLibraryDocument(event, '${escAttr(d.id)}')">
+      <span class="doc-icon">§</span>
+      <span class="doc-name" title="${escAttr(d.title || '')}">${escHtml(d.title || '未命名文档')}</span>
+      <span class="doc-chunks">v${d.latest_version || 0}</span>
+      <span class="doc-ingest" onclick="ingestLibraryDocument(event, '${escAttr(d.id)}')" title="重新入库 RAG">↻</span>
+    </div>`).join('');
+}
+
+async function fetchDocumentJSON(url, options) {
+  const resp = await fetch(url, options);
+  const raw = await resp.text();
+  let data = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch(e) {
+      data = { error: raw };
+    }
+  }
+  if (!resp.ok) throw new Error(data.detail || data.error || raw || `HTTP ${resp.status}`);
+  return data;
+}
+
+async function viewLibraryDocument(e, id) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  try {
+    const res = await fetchDocumentJSON('/api/documents/' + encodeURIComponent(id));
+    const doc = res.document || {};
+    const ver = res.version || {};
+    openDocumentViewer(doc, ver);
+  } catch(e) {
+    openDocumentViewer({ title: '读取文档失败', id: '' }, { content_md: e.message });
+  }
+}
+
+async function ingestLibraryDocument(e, id) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  try {
+    const res = await ingestDocumentByID(id);
+    appendBubble('ai', `文档已重新入库：${res.indexed_count || 0}/${res.chunk_count || 0} 个 chunk`, false);
+  } catch(err) {
+    appendBubble('ai', '入库失败：' + err.message);
+  }
+}
+
+async function ingestDocumentByID(id) {
+  const res = await fetchDocumentJSON('/api/documents/' + encodeURIComponent(id) + '/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  loadLibraryDocs();
+  return res;
+}
+
+function maybeRefreshLibraryAfterTool(toolName) {
+  if (!toolName) return;
+  const name = String(toolName);
+  if (['write_document', 'ingest_document', 'doc_agent'].some(t => name.includes(t))) {
+    loadLibraryDocs();
+  }
+}
+
+function openDocumentViewer(doc, ver) {
+  currentViewerDocId = doc.id || null;
+  const viewer = document.getElementById('docViewer');
+  const title = document.getElementById('docViewerTitle');
+  const meta = document.getElementById('docViewerMeta');
+  const content = document.getElementById('docViewerContent');
+  const ingestBtn = document.getElementById('docViewerIngest');
+  const version = doc.latest_version || ver.version || 0;
+  const updated = formatDocTime(doc.updated_at || ver.created_at);
+  title.textContent = doc.title || '本地文档';
+  meta.dataset.base = `v${version} · ${doc.doc_type || 'document'} · ${doc.source || 'local'}${updated ? ' · ' + updated : ''}`;
+  meta.textContent = meta.dataset.base;
+  content.textContent = ver.content_md || '（空文档）';
+  ingestBtn.disabled = !currentViewerDocId;
+  viewer.classList.add('open');
+}
+
+function closeDocumentViewer(e) {
+  if (e && e.currentTarget && e.target !== e.currentTarget) return;
+  const viewer = document.getElementById('docViewer');
+  if (viewer) viewer.classList.remove('open');
+  currentViewerDocId = null;
+}
+
+async function ingestCurrentViewerDocument() {
+  if (!currentViewerDocId) return;
+  const btn = document.getElementById('docViewerIngest');
+  const meta = document.getElementById('docViewerMeta');
+  const base = meta.dataset.base || meta.textContent || '';
+  btn.disabled = true;
+  meta.textContent = `${base} · 入库中...`;
+  try {
+    const res = await ingestDocumentByID(currentViewerDocId);
+    meta.textContent = `${base} · 已入库 ${res.indexed_count || 0}/${res.chunk_count || 0} chunks`;
+  } catch(err) {
+    meta.textContent = `${base} · 入库失败：${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function formatDocTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDocumentViewer();
+});
+
+// ══════════════════════════════════════════
+//  RAG toggle
+// ══════════════════════════════════════════
+function toggleRAG() {
+  ragOn = !ragOn;
+  document.getElementById('ragToggle').classList.toggle('on', ragOn);
+  updateModeHint();
+}
+
+// ══════════════════════════════════════════
+//  Tool picker
+// ══════════════════════════════════════════
+async function loadTools() {
+  try {
+    availableTools = await fetch('/api/tools').then(r => r.json()) || [];
+    renderPicker();
+  } catch(e) {}
+}
+
+function renderPicker() {
+  const toolIcons = { get_time:'🕐', get_weather:'🌤️', search_web:'🔍', rag_search:'✦', exec_command:'💻' };
+  document.getElementById('pickerItems').innerHTML = availableTools.map(t => `
+    <label class="picker-item">
+      <input type="checkbox" value="${t.name}" onchange="onToolCheck()" ${selectedTools.includes(t.name)?'checked':''}>
+      <span class="picker-item-icon">${toolIcons[t.name] || '✨'}</span>
+      <div class="picker-item-info">
+        <div class="p-name">${t.name}${t.is_mcp ? '<span class="picker-item-mcp">MCP</span>' : ''}</div>
+        <div class="p-desc">${t.description || t.desc || ''}</div>
+      </div>
+    </label>`).join('');
+}
+
+function toggleMCPForm() {
+  document.getElementById('mcpForm').classList.toggle('open');
+}
+
+async function submitMCPTool() {
+  const name     = document.getElementById('mcpName').value.trim();
+  const desc     = document.getElementById('mcpDesc').value.trim();
+  const endpoint = document.getElementById('mcpEndpoint').value.trim();
+  if (!name || !endpoint) { alert('工具名称和端点不能为空'); return; }
+  try {
+    const res = await fetch('/api/tools/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: desc, endpoint, params: [] })
+    }).then(r => r.json());
+    if (res.ok) {
+      document.getElementById('mcpName').value = '';
+      document.getElementById('mcpDesc').value = '';
+      document.getElementById('mcpEndpoint').value = '';
+      document.getElementById('mcpForm').classList.remove('open');
+      await loadTools();
+    }
+  } catch(e) { alert('注册失败：' + e.message); }
+}
+
+function onToolCheck() {
+  selectedTools = Array.from(document.querySelectorAll('#pickerItems input:checked')).map(c => c.value);
+  const btn   = document.getElementById('toolsBtn');
+  const count = document.getElementById('toolCount');
+  btn.classList.toggle('active', selectedTools.length > 0);
+  if (selectedTools.length > 0) {
+    count.textContent = selectedTools.length;
+    count.style.display = 'inline-block';
+  } else {
+    count.style.display = 'none';
+  }
+  updateModeHint();
+}
+
+function toggleToolPicker() {
+  document.getElementById('toolPicker').classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('toolsBtnWrap');
+  if (!wrap.contains(e.target)) document.getElementById('toolPicker').classList.remove('open');
+});
+
+function updateModeHint() {
+  const el = document.getElementById('modeHint');
+  if (selectedTools.length > 0) {
+    el.textContent = `✨ 工具模式 · ${selectedTools.join(', ')}`;
+    el.style.color = 'var(--primary-d)';
+  } else if (ragOn) {
+    el.textContent = '📚 知识库增强模式';
+    el.style.color = 'var(--pink-d)';
+  } else {
+    el.textContent = '💬 直接对话模式';
+    el.style.color = 'var(--text3)';
+  }
+}
+
+// ══════════════════════════════════════════
+//  Messages
+// ══════════════════════════════════════════
+function clearMessages() {
+  const el = document.getElementById('messages');
+  el.innerHTML = '<div class="welcome" id="welcome"><div class="welcome-icon">✦</div><div class="welcome-title">你好，有什么我能帮你的？</div><div class="welcome-desc">✨ 开启知识库可检索你上传的文件；选择工具后，我会自动推理并调用它们完成任务。</div></div>';
+}
+
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function appendBubble(role, html, isHtml = false) {
+  hideWelcome();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-row ' + role;
+  const name = role === 'user' ? '你' : 'AI';
+  const icon = role === 'user' ? '✦' : 'AI';
+  wrap.innerHTML = `
+    <div class="avatar ${role}">${icon}</div>
+    <div class="msg-body">
+      <div class="msg-name">${name}</div>
+      <div class="bubble ${role}">${isHtml ? html : escHtml(html)}</div>
+    </div>`;
+  document.getElementById('messages').appendChild(wrap);
+  document.getElementById('messages').scrollTop = 999999;
+  return wrap;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function escAttr(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ══════════════════════════════════════════
+//  Build reply HTML
+// ══════════════════════════════════════════
+function buildReply(data) {
+  const parts = [];
+
+  if (data.extracted_info) {
+    parts.push(`<div class="memory-note">💾 ${escHtml(data.extracted_info)}</div>`);
+  }
+
+  const hasSteps   = data.steps  && data.steps.length > 0;
+  const hasTool    = data.tool_call && data.tool_call.tool_name;
+  const hasRAG     = data.search_results && data.search_results.length > 0;
+  const mode       = data.mode || 'chat';
+
+  if (hasSteps || hasTool || hasRAG) {
+    const badgeClass = { react:'badge-react', tool:'badge-tool', rag:'badge-rag', memory:'badge-memory' }[mode] || '';
+    const badgeText  = { react:'ReAct 推理', tool:'工具调用', rag:'知识检索', memory:'记忆增强' }[mode] || mode;
+    const thinkId    = 'think_' + Date.now();
+
+    let bodyHtml = '';
+
+    if (hasSteps) {
+      const typeMap = {
+        'Thought':      ['step-thought',     '💭 思考'],
+        'Action':       ['step-action',       '⚡ 动作'],
+        'Observation':  ['step-observation',  '🔍 观察'],
+        'Final Answer': ['step-final',        '✨ 汇总'],
+      };
+      for (const s of data.steps) {
+        const [cls, label] = typeMap[s.type] || ['step-thought', s.type];
+        let paramsHtml = '';
+        if (s.params && Object.keys(s.params).length > 0) {
+          paramsHtml = `<div class="step-params">${escHtml(JSON.stringify(s.params))}</div>`;
+        }
+        bodyHtml += `
+          <div class="step-row">
+            <span class="step-type ${cls}">${label}</span>
+            <div class="step-content">${escHtml(s.content)}${paramsHtml}</div>
+          </div>`;
+      }
+    }
+
+    if (hasTool && !hasSteps) {
+      const tc = data.tool_call;
+      const paramsStr = tc.params ? JSON.stringify(tc.params) : '{}';
+      bodyHtml += `<div class="tool-call-block">
+        <div class="tool-call-row"><span class="tool-call-label">工具</span><span class="tool-call-val">${escHtml(tc.tool_name)}</span></div>
+        <div class="tool-call-row"><span class="tool-call-label">参数</span><span class="tool-call-val" style="font-family:monospace">${escHtml(paramsStr)}</span></div>
+        <div class="tool-call-row"><span class="tool-call-label">结果</span><span class="tool-call-val tool-call-result">${escHtml(tc.tool_result || '')}</span></div>
+      </div>`;
+    }
+
+    if (hasRAG) {
+      bodyHtml += `<div class="rag-sources">`;
+      const seen = new Set();
+      for (const r of data.search_results.slice(0, 3)) {
+        const content = ((r.chunk && r.chunk.content) || r.content || '').trim();
+        if (!content || seen.has(content)) continue;
+        seen.add(content);
+        const score = (r.similarity * 100).toFixed(1);
+        const preview = content.slice(0, 120);
+        bodyHtml += `<div class="rag-chunk"><span class="rag-chunk-score">相关度 ${score}%</span>${escHtml(preview)}${preview.length >= 120 ? '…' : ''}</div>`;
+      }
+      bodyHtml += `</div>`;
+    }
+
+    parts.push(`
+      <div class="think-wrap">
+        <div class="think-header" id="${thinkId}_hdr" onclick="toggleThink('${thinkId}')">
+          <span class="think-icon">▶</span>
+          <span class="think-label">思考过程</span>
+          <span class="think-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="think-body" id="${thinkId}_body">${bodyHtml}</div>
+      </div>`);
+  }
+
+  if (data.interrupted) {
+    parts.push('<div class="interrupted-badge">本次回复已取消</div>');
+  }
+
+  parts.push(`<div class="answer-text">${escHtml(data.answer || '')}</div>`);
+
+  return parts.join('');
+}
+
+function toggleThink(id) {
+  const hdr  = document.getElementById(id + '_hdr');
+  const body = document.getElementById(id + '_body');
+  const open = body.classList.toggle('open');
+  hdr.classList.toggle('open', open);
+}
+
+// ══════════════════════════════════════════
+//  Send / Stop
+// ══════════════════════════════════════════
+
+function handleSendBtn() {
+  if (isLoading) {
+    stopChat();
+  } else {
+    send();
+  }
+}
+
+function stopChat() {
+  if (window._chatAbortCtrl) {
+    window._chatAbortCtrl.abort();
+    window._chatAbortCtrl = null;
+  }
+  fetch('/api/chat/cancel', { method: 'POST' }).catch(() => {});
+  setLoadingState(false);
+}
+
+function setLoadingState(loading) {
+  isLoading = loading;
+  const btn = document.getElementById('sendBtn');
+  if (loading) {
+    btn.textContent = '■';
+    btn.classList.add('stop');
+    btn.disabled = false;
+  } else {
+    btn.textContent = '✨';
+    btn.classList.remove('stop');
+    btn.disabled = false;
+  }
+}
+
+function markStreamCompleted(thinkWrap, mode, interrupted) {
+  if (interrupted) return;
+  const badgeEl = thinkWrap && thinkWrap.querySelector('.think-badge');
+  if (!badgeEl) return;
+  const labels = {
+    react: '推理完成',
+    tool: '工具调用完成',
+    rag: '检索完成',
+    chat: '回复完成'
+  };
+  if (!labels[mode]) return;
+  badgeEl.textContent = labels[mode];
+  badgeEl.className = 'think-badge ' + (mode === 'rag' ? 'badge-rag' : mode === 'tool' ? 'badge-tool' : 'badge-react');
+}
+
+async function send() {
+  const input = document.getElementById('input');
+  const msg = input.value.trim();
+  if (!msg || isLoading) return;
+
+  if (!currentId) newSession();
+
+  const userHtml = escHtml(msg);
+  appendBubble('user', msg);
+  pushMessage('user', userHtml);
+  input.value = ''; autoResize(input);
+
+  setLoadingState(true);
+
+  hideWelcome();
+  const aiWrap = document.createElement('div');
+  aiWrap.className = 'msg-row ai';
+  const thinkId = 'think_' + Date.now();
+  aiWrap.innerHTML = `
+    <div class="avatar ai">AI</div>
+    <div class="msg-body">
+      <div class="msg-name">AI</div>
+      <div class="bubble ai">
+        <div class="stream-think-wrap" style="display:none">
+          <div class="think-header open" id="${thinkId}_hdr" onclick="toggleThink('${thinkId}')">
+            <span class="think-icon">▶</span>
+            <span class="think-label">思考过程</span>
+            <span class="think-badge badge-react">推理中</span>
+          </div>
+          <div class="think-body open" id="${thinkId}_body"></div>
+        </div>
+        <div class="stream-memory" style="display:none"></div>
+        <div class="stream-tool-call" style="display:none"></div>
+        <div class="stream-rag" style="display:none"></div>
+        <div class="stream-answer"><div class="typing"><span></span><span></span><span></span></div></div>
+      </div>
+    </div>`;
+  document.getElementById('messages').appendChild(aiWrap);
+  document.getElementById('messages').scrollTop = 999999;
+
+  const bubble = aiWrap.querySelector('.bubble.ai');
+  const thinkWrap = aiWrap.querySelector('.stream-think-wrap');
+  const thinkBody = aiWrap.querySelector(`#${thinkId}_body`);
+  const memoryEl = aiWrap.querySelector('.stream-memory');
+  const toolCallEl = aiWrap.querySelector('.stream-tool-call');
+  const ragEl = aiWrap.querySelector('.stream-rag');
+  const answerEl = aiWrap.querySelector('.stream-answer');
+  let answerText = '';
+  let currentMode = '';
+
+  window._chatAbortCtrl = new AbortController();
+
+  try {
+    const body = { message: msg, use_rag: ragOn, selected_tools: selectedTools, explicit: true };
+
+    const resp = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: window._chatAbortCtrl.signal
+    });
+
+    if (!resp.ok) {
+      aiWrap.remove();
+      const syncData = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(r => r.json());
+      const replyHtml = buildReply(syncData);
+      const msgEl = appendBubble('ai', replyHtml, true);
+      autoExpandThinking(msgEl, syncData);
+      pushMessage('ai', replyHtml);
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      sseBuffer += decoder.decode(value, { stream: true });
+      const parts = sseBuffer.split('\n\n');
+      sseBuffer = parts.pop();
+
+      for (const part of parts) {
+        let evtName = '', evtData = '';
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) evtName = line.slice(7).trim();
+          if (line.startsWith('data: ')) evtData = line.slice(6);
+        }
+        if (!evtData) continue;
+        let data;
+        try { data = JSON.parse(evtData); } catch(e) { continue; }
+
+        switch (evtName) {
+          case 'route': {
+            currentMode = data.mode || '';
+            const badgeEl = thinkWrap.querySelector('.think-badge');
+            const modeLabels = { react:'ReAct 推理', tool:'工具调用', rag:'知识检索', chat:'对话' };
+            const modeClasses = { react:'badge-react', tool:'badge-tool', rag:'badge-rag', chat:'badge-react' };
+            if (badgeEl) {
+              badgeEl.textContent = modeLabels[data.mode] || data.mode;
+              badgeEl.className = 'think-badge ' + (modeClasses[data.mode] || '');
+            }
+            if (data.mode !== 'chat') {
+              thinkWrap.style.display = '';
+            }
+            break;
+          }
+          case 'memory': {
+            memoryEl.innerHTML = `<div class="memory-note">💾 ${escHtml(data.extracted_info || '')}</div>`;
+            memoryEl.style.display = '';
+            break;
+          }
+          case 'step': {
+            thinkWrap.style.display = '';
+            const typeMap = {
+              'Thought':      ['step-thought',     '💭 思考'],
+              'Action':       ['step-action',       '⚡ 动作'],
+              'Observation':  ['step-observation',  '🔍 观察'],
+              'Final Answer': ['step-final',        '✨ 汇总'],
+            };
+            const [cls, label] = typeMap[data.type] || ['step-thought', data.type];
+            let paramsHtml = '';
+            if (data.params && Object.keys(data.params).length > 0) {
+              paramsHtml = `<div class="step-params">${escHtml(JSON.stringify(data.params))}</div>`;
+            }
+            thinkBody.innerHTML += `
+              <div class="step-row">
+                <span class="step-type ${cls}">${label}</span>
+                <div class="step-content">${escHtml(data.content || '')}${paramsHtml}</div>
+              </div>`;
+            maybeRefreshLibraryAfterTool(data.tool || data.tool_name);
+            break;
+          }
+          case 'tool_call': {
+            const paramsStr = data.params ? JSON.stringify(data.params) : '{}';
+            toolCallEl.innerHTML = `<div class="tool-call-block">
+              <div class="tool-call-row"><span class="tool-call-label">工具</span><span class="tool-call-val">${escHtml(data.tool_name)}</span></div>
+              <div class="tool-call-row"><span class="tool-call-label">参数</span><span class="tool-call-val" style="font-family:monospace">${escHtml(paramsStr)}</span></div>
+              <div class="tool-call-row"><span class="tool-call-label">结果</span><span class="tool-call-val tool-call-result">${escHtml(data.tool_result || '')}</span></div>
+            </div>`;
+            toolCallEl.style.display = '';
+            maybeRefreshLibraryAfterTool(data.tool || data.tool_name);
+            break;
+          }
+          case 'rag_result': {
+            let ragHtml = '<div class="rag-sources">';
+            const results = data.search_results || [];
+            for (const r of results.slice(0, 3)) {
+              const score = (r.similarity * 100).toFixed(1);
+              const preview = (r.chunk && r.chunk.content) ? r.chunk.content.slice(0, 120) : '';
+              ragHtml += `<div class="rag-chunk"><span class="rag-chunk-score">相关度 ${score}%</span>${escHtml(preview)}${preview.length >= 120 ? '…' : ''}</div>`;
+            }
+            ragHtml += '</div>';
+            ragEl.innerHTML = ragHtml;
+            ragEl.style.display = '';
+            break;
+          }
+          case 'token': {
+            const typing = answerEl.querySelector('.typing');
+            if (typing) typing.remove();
+            answerText += (data.content || '');
+            answerEl.innerHTML = `<div class="answer-text">${escHtml(answerText)}</div>`;
+            break;
+          }
+          case 'done': {
+            const typing2 = answerEl.querySelector('.typing');
+            if (typing2) typing2.remove();
+            if (!answerText && data.answer) {
+              answerText = data.answer;
+              answerEl.innerHTML = `<div class="answer-text">${escHtml(answerText)}</div>`;
+            }
+            if (data.interrupted) {
+              answerEl.innerHTML = `<div class="interrupted-badge">本次回复已取消</div>` + answerEl.innerHTML;
+            } else {
+              markStreamCompleted(thinkWrap, data.mode || currentMode, false);
+            }
+            maybeRefreshLibraryAfterTool(data.tool || data.tool_name || (data.task && data.task.tool_name));
+            break;
+          }
+        }
+        document.getElementById('messages').scrollTop = 999999;
+      }
+    }
+
+    if (sseBuffer.trim()) {
+      for (const line of sseBuffer.split('\n')) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.answer && !answerText) {
+              answerText = data.answer;
+              const typing = answerEl.querySelector('.typing');
+              if (typing) typing.remove();
+              answerEl.innerHTML = `<div class="answer-text">${escHtml(answerText)}</div>`;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+
+    const replyHtml = bubble.innerHTML;
+    pushMessage('ai', replyHtml);
+
+  } catch(e) {
+    const typing = answerEl.querySelector('.typing');
+    if (typing) typing.remove();
+    if (e.name === 'AbortError') {
+      answerEl.innerHTML = `<div class="answer-text">本次回复已取消</div>`;
+      pushMessage('ai', '本次回复已取消');
+    } else {
+      answerEl.innerHTML = `<div class="answer-text">❌ 请求失败，请检查服务是否正常运行。</div>`;
+      pushMessage('ai', '❌ 请求失败');
+    }
+  } finally {
+    setLoadingState(false);
+    window._chatAbortCtrl = null;
+  }
+}
+
+function autoExpandThinking(msgEl, data) {
+  if (selectedTools.length > 0 || data.mode === 'react' || data.mode === 'tool' || data.mode === 'rag') {
+    const body = msgEl.querySelector('.think-body');
+    const hdr  = msgEl.querySelector('.think-header');
+    if (body) body.classList.add('open');
+    if (hdr)  hdr.classList.add('open');
+  }
+}
+
+function qs(msg) {
+  document.getElementById('input').value = msg;
+  send();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+// ══════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════
+renderSessions();
+renderDocs();
+loadLibraryDocs();
+loadTools();
+if (sessions.length > 0) {
+  // don't auto-switch, just show sessions in sidebar
+}
+</script>
+</body>
+</html>

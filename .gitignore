@@ -1,22 +1,3 @@
-# Build artifacts
-/final-agent
-/bin/
-/dist/
-*.test
-*.out
-.data/
-
-# IDE
-/.idea/
-/.vscode/
-/.worktrees/
-
-# OS
-.DS_Store
-
-# Logs
-*.log
-
-# Local env overrides
-.env
-.env.local
+# local staging area for spinning out video-factory into its own repo
+_vf-staging/
+final/config/config.local.yaml

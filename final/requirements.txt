@@ -1,0 +1,14 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pydantic==2.6.4
+python-multipart==0.0.9
+requests==2.31.0
+pyyaml==6.0.1
+psycopg2-binary==2.9.9
+elasticsearch==8.12.0
+kafka-python==2.0.2
+pymilvus==2.4.0
+neo4j>=5.0
+PyPDF2==3.0.1
+marshmallow<4
+environs<10

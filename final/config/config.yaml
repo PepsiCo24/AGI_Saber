@@ -1,0 +1,117 @@
+# 对话模型配置
+llm:
+  api_url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+  api_key: ""
+  model: deepseek-v4-flash-260425
+  temperature: 0.7
+
+embedding:
+  api_url: https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal
+  api_key: ""
+  model: doubao-embedding-vision-250615
+
+# 向量数据库配置
+milvus:
+  host: localhost
+  port: 19530
+
+# 关系型数据库配置
+postgres:
+  host: localhost
+  port: 5432
+  user: aiagent
+  password: aiagent123
+  database: aiagent
+
+elasticsearch:
+  addresses:
+    - http://localhost:9200
+  username: elastic
+  password: changeme
+
+kafka:
+  brokers:
+    - localhost:29092
+  topic: agent-events
+
+# rag 策略
+rag:
+  chunk_size: 200
+  chunk_overlap: 50
+  top_k: 3
+  rrf_constant_k: 60
+  semantic_weight: 0.7
+  enable_hybrid_search: true
+  rag_milvus_dim: 2048
+  rewrite:
+    enabled: true
+    num_queries: 3
+  rerank:
+    enabled: true
+    preview_len: 200
+
+memory:
+  short_term_max_turns: 5
+  long_term_top_k: 3
+  consolidation:
+    similarity_threshold: 0.80   # 合并阈值：超过此相似度的记忆会被合并
+    dedup_threshold: 0.95        # 去重阈值：超过此相似度的记忆视为重复
+    ttl_days: 30                 # 过期天数：超过此天数的低重要性记忆会被淘汰
+    decay_rate: 0.995            # 每日衰减系数（0.995 = 每天保留 99.5%）
+    min_importance: 0.3          # 低于此重要性 + 超 TTL 的记忆会被淘汰
+    trigger_interval: 5          # 每存入 N 条新记忆后触发合并
+
+harness:
+  max_retries: 3
+  retry_delay_ms: 200
+  step_timeout_ms: 5000
+  max_iterations: 5
+
+graph_runtime:
+  max_parallel: 2
+  race_timeout_ms: 30000
+  enable_racing: true
+
+server:
+  port: "8090"
+
+search:
+  api_key: ""               # 请填入你的 Tavily API Key（可选）
+  api_url: "https://tavily.com"
+
+# ===== 知识图谱（Neo4j，可选，不可用时跳过图检索）=====
+neo4j:
+  uri: "bolt://localhost:7687"
+  user: "neo4j"
+  password: "password123"
+  max_hops: 2        # 图遍历最大跳数
+  weight: 0.3        # 图检索在 RRF 融合中的权重
+  enabled: true      # false 时完全跳过知识图谱
+
+# ===== 沙箱执行（用于终端命令工具）=====
+sandbox:
+  enabled: true
+  backend: "docker"     # "docker" | "local" | "mock"
+  image: "ubuntu:22.04"
+  timeout_ms: 30000
+  max_output_bytes: 65536
+  memory_limit_mb: 256
+  cpu_percent: 50
+  max_pids: 64
+  network_disabled: true
+  readonly_rootfs: true
+
+# ===== 命令安全校验 =====
+security:
+  max_command_length: 500
+  allowlist_mode: false  # true = 白名单模式，只允许明确列出的命令
+  allowlist:
+    - "ls"
+    - "cat"
+    - "echo"
+    - "pwd"
+    - "date"
+    - "python3"
+    - "node"
+    - "go"
+    - "java"

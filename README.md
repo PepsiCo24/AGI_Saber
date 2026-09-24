@@ -1,388 +1,418 @@
-# AGI-saber
 
-agi时代的个人办公智能助手
+# AGI-assistant：多模态智能体系统
 
-后端是 `cmd/server/main.go`，提供认证、SSE 对话、知识库、记忆、工具、Skill、文档库和状态接口；前端在 `web/`，使用 Vite + Vue 3 + Pinia。后端不再托管前端静态文件，开发时分别启动。
+AGI-assistant 是一个面向个人与企业的多模态智能体系统，融合了检索增强生成（RAG）、三层记忆、知识图谱、沙箱执行与可恢复执行流，支持多轮对话、知识检索、工具调用与复杂推理。系统具备高可用性、可扩展性与工程落地能力。
 
-## 当前能力
+## 项目特性
 
-- 账号体系：注册、登录、JWT 鉴权；除健康检查和登录注册外，业务接口都需要 token。
-- 流式对话：`/api/chat/stream` 使用 SSE 推送 route、step、token、done 等事件。
-- ReAct 图执行：Planner 生成任务图，GraphRuntime 支持并行执行、竞速、重试、快照和失败后 replan。
-- RAG 知识库：支持文本、PDF 等文档上传；Milvus 语义检索、Elasticsearch BM25、Neo4j 图检索可用时会融合，不可用时降级。
-- 三层记忆：短期会话、长期记忆、用户偏好；长期记忆带合并、去重、衰减、隔离和 superseded 查询。
-- 子 Agent：`research_agent`、`writer_agent`、`review_agent`、`doc_agent`，用于知识增强报告和文档保存流水线。
-- 文档库：可写入 Markdown 文档、查询文档、删除/重新入库 RAG。
-- 工具系统：内置 `search_web`，支持 MCP HTTP 工具注册；普通对话默认进入 ReAct loop。
-- Skill 广场：内置办公 prompt skill，支持从 GitHub 搜索结果安装 prompt skill。
-- 沙箱产物：支持 Docker / local / mock 后端，为复杂任务准备宿主机产物目录。
-- 基础设施降级：PostgreSQL、Milvus、Elasticsearch、Kafka、Neo4j 均按连接状态降级；核心服务可启动，但部分能力会受限。
+- **多阶段智能体核心**：支持纯对话、RAG 检索、单工具调用、多工具编排（ReAct）等多种智能体模式，自动路由。
+- **RAG 检索增强生成**：融合 Milvus 语义向量、Elasticsearch 关键词、Neo4j 知识图谱，三路 RRF 融合排序，自动降级，支持文档分块与异步实体关系抽取。
+- **三层记忆系统**：短期记忆（滑动窗口）、长期记忆（Embedding/TF）、用户偏好（LLM+规则），支持去重、合并、衰减、过期淘汰。
+- **图增强记忆**：长期记忆叠加 Neo4j 图层，支持 FOLLOWS、SIMILAR_TO、CAUSES、BELONGS_TO 等关系，提升历史联想与推理能力。
+- **工具链与可恢复执行**：内置时间、天气、搜索、RAG 检索、命令执行等工具，支持 ReAct 规划-执行-生成流程，任务快照与重试机制保障稳定性。
+- **沙箱执行**：支持 Docker / Local / Mock 三种沙箱后端，资源限制（CPU/内存/PID/网络），命令白名单安全校验。
+- **高可用基础设施**：PostgreSQL 持久化、Milvus/ES/Neo4j/Kafka 可选，自动优雅降级，适配多种部署环境。
 
-> 注意：GitHub Skill 当前不会下载或执行仓库代码。它只是把 GitHub 仓库名称和描述包装成一个 prompt skill，再由本地 LLM 完成任务。
+---
 
-## 架构概览
+
+## 整体架构图
 
 ```mermaid
-flowchart TB
-  User["用户 / 浏览器"] --> Web["web/ Vue 3 + Pinia"]
-  Web --> API["Go HTTP API<br/>chi + JWT + SSE"]
+graph TB
+    subgraph Frontend["前端 (index.html)"]
+        CHAT["对话区"]
+        SIDEBAR["侧边栏<br/>知识库上传 / 近期对话"]
+        CTRL["控制栏<br/>知识库开关 / 工具选择"]
+    end
 
-  API --> Agent["UnifiedAgent"]
-  Agent --> Router["路由<br/>rag / rag_agent / react"]
-  Router --> React["ReAct Planner<br/>TaskGraph + GraphRuntime"]
-  Router --> RAG["RAG Engine"]
+    subgraph Router["智能路由层"]
+        R["Router"]
+    end
 
-  React --> Tools["Tools<br/>search_web / MCP / skill_*"]
-  React --> SubAgents["Sub Agents<br/>research / writer / review / doc"]
-  React --> Sandbox["Sandbox<br/>docker / local / mock"]
+    subgraph Core["核心能力"]
+        CHAT_ENGINE["Stage 1: 多轮对话<br/>LLM + STM 历史注入"]
+        RAG_ENGINE["Stage 2: RAG<br/>Milvus + ES + Neo4j 三路检索 → RRF融合 → LLM合成"]
+        TOOL_ENGINE["Stage 3: 工具调用<br/>time / weather / search / exec_command"]
+        REACT_ENGINE["Stage 4: ReAct<br/>Planner → Executor → Generator"]
+    end
 
-  RAG --> Milvus["Milvus"]
-  RAG --> ES["Elasticsearch"]
-  RAG --> Neo4j["Neo4j"]
-  RAG --> PG["PostgreSQL"]
+    subgraph Memory["Stage 5: 三层记忆"]
+        STM["短期记忆<br/>滑动窗口"]
+        LTM["长期记忆<br/>Embedding语义 + Neo4j图关系"]
+        PREF["用户偏好<br/>LLM NER提取"]
+    end
 
-  Agent --> Memory["Memory Stack<br/>STM / LTM / Preferences"]
-  Memory --> PG
-  Memory --> Neo4j
+    subgraph Harness["Stage 6: 稳定执行"]
+        RETRY["重试机制"]
+        SNAP["快照恢复"]
+    end
 
-  API --> SkillHub["Skill Service<br/>builtin + GitHub marketplace"]
-  SkillHub --> PG
+    subgraph Sandbox["沙箱执行"]
+        DOCKER["Docker 后端<br/>资源隔离 + 安全限制"]
+        LOCAL["Local 后端"]
+        MOCK["Mock 后端"]
+    end
 
-  API --> Docs["Document Library"]
-  Docs --> PG
+    subgraph Infra["基础设施 (全部可选, 优雅降级)"]
+        PG["PostgreSQL<br/>偏好/LTM/RAG Chunk持久化"]
+        MIL["Milvus<br/>语义向量近邻搜索"]
+        ES["Elasticsearch<br/>BM25全文检索"]
+        NEO["Neo4j<br/>知识图谱 + 图增强记忆"]
+        KAFKA["Kafka<br/>事件流"]
+    end
+
+    CHAT --> R
+    CTRL --> R
+
+    R -->|纯对话| CHAT_ENGINE
+    R -->|知识检索| RAG_ENGINE
+    R -->|单工具| TOOL_ENGINE
+    R -->|多工具编排| REACT_ENGINE
+
+    CHAT_ENGINE --> Memory
+    RAG_ENGINE --> Memory
+    TOOL_ENGINE --> Memory
+    REACT_ENGINE --> Memory
+    REACT_ENGINE --> Harness
+
+    TOOL_ENGINE --> Sandbox
+    REACT_ENGINE --> Sandbox
+    Sandbox --> DOCKER
+    Sandbox --> LOCAL
+    Sandbox --> MOCK
+
+    RETRY --> SNAP
+    SNAP --> PG
+
+    STM -.->|多轮历史| CHAT_ENGINE
+    LTM -.->|跨会话恢复| CHAT_ENGINE
+    PREF -.->|个性化上下文| CHAT_ENGINE
+
+    LTM --> PG
+    LTM --> NEO
+    PREF --> PG
+    RAG_ENGINE --> MIL
+    RAG_ENGINE --> ES
+    RAG_ENGINE --> NEO
+    CHAT_ENGINE --> KAFKA
+
+    SIDEBAR -->|上传文档| RAG_ENGINE
 ```
 
-## 技术栈
 
-- Backend: Go 1.24, chi, JWT, PostgreSQL driver, Milvus SDK, Elasticsearch client, Neo4j driver, Kafka client.
-- Frontend: Vue 3, Vite, Pinia.
-- Infra: PostgreSQL, Milvus + etcd + MinIO, Elasticsearch, Kafka KRaft, Neo4j.
-- LLM API: OpenAI-compatible chat endpoint; 默认配置示例使用智谱 API 地址。
-
-## 快速开始
-
-### 1. 准备环境
-
-建议版本：
-
-- Go 1.24+
-- Node.js 18+
-- Docker Desktop / Docker Engine
-
-### 2. 配置密钥
-
-后端启动强制要求 `JWT_SECRET` 至少 32 字节：
-
-```bash
-export JWT_SECRET="replace-with-at-least-32-bytes-secret"
-```
-
-可选环境变量：
-
-```bash
-export GITHUB_TOKEN="ghp_xxx"      # Skill 广场搜索 GitHub 时提额，可不填
-export PPROF_ADMIN_TOKEN="xxx"     # 仅 observability.pprof.enabled=true 时需要
-```
-
-然后按需编辑 [config/config.yaml](config/config.yaml)：
-
-- `llm.api_url` / `llm.api_key` / `llm.model`
-- `llm.fast_model`
-- `embedding.api_url` / `embedding.api_key` / `embedding.model`
-- `search.api_key` / `search.api_url`
-- `skillhub.enabled` / `skillhub.keyword`
-- `sandbox.backend` / `sandbox.artifact_host_dir`
-
-配置文件里的 `"."` 只是占位符。因为非空字符串会被视为“已配置真实 API”，如果不替换，LLM 请求会失败后降级 mock。
-
-### 3. 启动基础设施
-
-```bash
-docker compose up -d
-```
-
-会启动：
-
-- PostgreSQL: `localhost:5432`
-- Milvus: `localhost:19530`
-- Elasticsearch: `localhost:9200`
-- Kafka: `localhost:29092`
-- Neo4j: `localhost:7474` / `localhost:7687`
-
-只想跑最小后端也可以不启动这些服务；系统会降级，但登录、安装 Skill、持久化记忆等依赖 PostgreSQL 的能力会不可用。
-
-### 4. 启动后端
-
-```bash
-go mod download
-go run ./cmd/server
-```
-
-默认监听：
-
-```text
-http://localhost:8090
-```
-
-健康检查：
-
-```bash
-curl http://localhost:8090/healthz
-curl http://localhost:8090/readyz
-```
-
-### 5. 启动前端
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-访问：
-
-```text
-http://localhost:5173
-```
-
-`web/vite.config.js` 会把 `/api`、`/healthz`、`/readyz` 代理到 `http://localhost:8090`。
-
-## 常用命令
-
-```bash
-# 后端测试
-go test ./...
-
-# 前端构建
-cd web && npm run build
-
-# 前端本地预览生产包
-cd web && npm run preview
-
-# 停止基础设施
-docker compose down
-
-# 停止并删除数据卷
-docker compose down -v
-```
-
-## 使用流程
-
-1. 打开前端，注册或登录账号。
-2. 普通聊天默认进入 `react` 模式，由 Planner 判断是否需要调用工具或 skill。
-3. 打开知识库开关后：
-   - 普通问答走 `rag`。
-   - 报告、方案、总结、文档类意图走 `rag_agent`，触发 research -> writer -> review -> doc 流水线。
-4. 在 Skill 广场安装 skill 后，需要在“已安装”区域打开开关，才会参与主循环。
-5. 上传文档后可用于 RAG；由 doc_agent 保存的报告也可自动写入文档库并入库 RAG。
-
-## Skill 机制
-
-Skill 的领域模型在 `internal/domain/skill`，应用服务在 `internal/application/skill`。
-
-当前支持两类调用：
-
-- `prompt`：把 skill 的 `PromptTemplate` 渲染成 LLM 请求。内置办公 skill 和 GitHub skill 目前都走这类。
-- `mcp`：复用外部 HTTP MCP 工具调用，当前作为扩展路径保留。
-
-安装与调用链：
+## 核心流程时序图
 
 ```mermaid
 sequenceDiagram
-  participant UI as SkillHub.vue
-  participant API as /api/skills
-  participant SVC as skill.Service
-  participant DB as installed_skills
-  participant Agent as UnifiedAgent
-  participant RT as GraphRuntime
-  participant LLM as LLM
+    actor User
+    participant FE as 前端
+    participant Router as 智能路由
+    participant LLM as LLM API
+    participant Planner as Planner LLM
+    participant Executor as Executor
+    participant Tool as Tool / RAG / Sandbox
+    participant Generator as Generator LLM
+    participant Memory as 三层记忆
+    participant DB as PostgreSQL
 
-  UI->>API: install / toggle
-  API->>SVC: Install / Toggle
-  SVC->>DB: 保存 manifest + enabled
-  Agent->>SVC: EnabledTools(userID)
-  SVC-->>Agent: map[skill_*]tool.Tool
-  Agent->>RT: routeTools 合并 skill_*
-  RT->>LLM: 执行 prompt skill
+    User->>FE: 输入消息 + 选择工具
+    FE->>Router: POST /api/chat {message, tools}
+
+    alt 纯对话 (无工具)
+        Router->>Memory: 加载 STM 历史 + LTM + 偏好
+        Memory-->>Router: 上下文消息列表
+        Router->>LLM: Chat(systemPrompt + 历史 + 当前消息)
+        LLM-->>Router: 自然语言回答
+        Router->>Memory: 异步提取偏好 + 存储长期记忆
+
+    else 工具编排 (ReAct)
+        Router->>Planner: 分析query + 工具列表 → 执行计划
+        Planner-->>Router: [{tool, params, reason}, ...]
+
+        loop 按计划逐步执行
+            Router->>Executor: 执行 tool(params)
+            Executor->>Tool: 调用具体工具
+            Tool-->>Executor: 观察结果
+            Executor-->>Router: 步骤结果 (思考 → 动作 → 观察)
+            Router->>DB: 保存快照
+        end
+
+        Router->>Generator: 合成所有观察 → 最终答案
+        Generator-->>Router: 自然语言回答
+        Router->>Memory: 异步存储长期记忆 + 提取偏好
+    end
+
+    Router-->>FE: {answer, steps, memories}
+    FE-->>User: 渲染回答 + 思考过程
 ```
 
-边界说明：
 
-- GitHub Skill 不执行仓库代码，只把仓库描述作为背景资料注入 prompt。
-- Skill 只有 `enabled=true` 时才会进入当前用户的 `routeTools`。
-- RAG 简单问答模式不会合并 Skill；普通 `react` loop 才会合并 Skill。
-- skill 节点属于 LLM 型工具，GraphRuntime 会放宽单步超时，避免 5 秒默认工具超时误杀。
+## RAG 三路混合检索流程图
 
-## API 摘要
+```mermaid
+sequenceDiagram
+    actor User
+    participant RAG as RAG Engine
+    participant EMB as Embedding API
+    participant MIL as Milvus
+    participant ES as Elasticsearch
+    participant NEO as Neo4j
+    participant PG as PostgreSQL
+    participant LLM as LLM API
 
-公开接口：
+    User->>RAG: 查询: "量子计算的应用领域"
+    RAG->>EMB: Embed(query)
+    EMB-->>RAG: query向量 [0.12, -0.34, ...]
 
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `POST` | `/api/auth/register` | 注册并返回 token |
-| `POST` | `/api/auth/login` | 登录并返回 token |
-| `GET` | `/healthz` | 存活检查 |
-| `GET` | `/readyz` | 就绪检查 |
+    par 三路并行检索
+        RAG->>MIL: MilvusSearch(query向量, topK)
+        MIL-->>RAG: 语义结果 [{pg_id, distance}, ...]
+        RAG->>ES: BM25Search(query, topK)
+        ES-->>RAG: 关键词结果 [{pg_id, score}, ...]
+        RAG->>NEO: GraphSearch(实体, maxHops=2)
+        NEO-->>RAG: 图谱结果 [{pg_id, weight}, ...]
+    end
 
-需要 `Authorization: Bearer <token>`：
+    RAG->>RAG: RRF融合排序<br/>score = Σ(1/(k+rank_i)) × weight_i<br/>语义0.7 + BM25权重 + 图0.3
 
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `GET` | `/api/auth/me` | 当前用户 |
-| `POST` | `/api/chat` | 同步对话 |
-| `POST` | `/api/chat/stream` | SSE 流式对话 |
-| `POST` | `/api/chat/cancel` | 取消当前请求 |
-| `POST` | `/api/upload` | 上传文件或文本入库 RAG |
-| `POST` | `/api/docs/delete` | 删除 RAG 文档 chunks |
-| `GET` | `/api/documents/` | 文档库列表 |
-| `POST` | `/api/documents/` | 写入文档库 |
-| `GET` | `/api/documents/{documentID}` | 获取文档 |
-| `POST` | `/api/documents/{documentID}/ingest` | 文档重新入库 RAG |
-| `GET` | `/api/memory/` | 记忆快照 |
-| `GET` | `/api/memory/quarantined` | 被隔离记忆 |
-| `POST` | `/api/memory/quarantine` | 隔离记忆 |
-| `POST` | `/api/memory/unquarantine` | 解除隔离 |
-| `GET` | `/api/memory/superseded` | 被替代记忆 |
-| `GET` | `/api/tools` | 当前全局工具列表 |
-| `POST` | `/api/tools/mcp` | 注册 MCP HTTP 工具 |
-| `GET` | `/api/skills/marketplace` | Skill 广场 |
-| `GET` | `/api/skills/installed` | 当前用户已安装 Skill |
-| `POST` | `/api/skills/install` | 安装 Skill |
-| `POST` | `/api/skills/uninstall` | 卸载 Skill |
-| `POST` | `/api/skills/toggle` | 开关 Skill |
-| `GET` | `/api/snapshots` | ReAct 任务快照 |
-| `GET` | `/api/status` | 服务状态 |
+    RAG->>PG: LoadRAGChunksByIDs(top_pg_ids)
+    PG-->>RAG: [{id, content}, ...]
 
-SSE 事件类型主要包括：
+    RAG->>LLM: Chat(系统提示 + 检索上下文 + 用户问题)
+    LLM-->>RAG: 基于知识的回答
 
-- `start`
-- `route`
-- `memory`
-- `graph_ready`
-- `node_start`
-- `node_done`
-- `step`
-- `sandbox_ready`
-- `rag_result`
-- `token`
-- `done`
+    RAG-->>User: 回答 + 引用来源
+```
+
+
+## 记忆系统详细流程图
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as Agent
+    participant STM as 短期记忆<br/>(滑动窗口 N×2)
+    participant LLM as LLM API
+    participant EMB as Embedding API
+    participant LTM as 长期记忆<br/>(Embedding+TF双层)
+    participant GRAPH as Neo4j图增强
+    participant PREF as 用户偏好<br/>(LLM NER+规则双重)
+    participant PG as PostgreSQL
+
+    Note over User,PG: ═══════════ 服务启动: 跨会话恢复 ═══════════
+    Agent->>PG: LoadPreferences(userID)
+    PG-->>Agent: 历史偏好 [{key, value}, ...]
+    Agent->>PREF: SaveBatch(恢复偏好到内存)
+    Agent->>PG: LoadLongTermItems()
+    PG-->>Agent: 历史LTM [{id, content, embedding, importance}, ...]
+    Agent->>LTM: StoreItem(逐条恢复到内存索引)
+    Note right of LTM: 重建TF词表<br/>恢复Embedding向量
+    Agent->>GRAPH: 重建记忆节点与关系
+    Agent->>STM: 初始化空窗口
+
+    Note over User,PG: ═══════════ 每轮对话: 读取阶段 ═══════════
+    User->>Agent: "你好，我叫小明，我喜欢打篮球"
+    Agent->>STM: Add(user, 消息)
+
+    Agent->>LTM: Recall(query, topK=3, queryEmbedding?)
+    alt Embedding API 可用
+        Agent->>EMB: Embed(query)
+        EMB-->>LTM: query向量
+        loop 遍历所有LTM条目
+            LTM->>LTM: cosine(queryEmb, itemEmb)
+            LTM->>LTM: score = sim×0.7 + importance×0.3
+            alt score ≥ 0.4 阈值
+                LTM->>LTM: 更新item.LastAccessed
+                LTM->>LTM: 加入候选集
+            else score < 0.4
+                Note right of LTM: 过滤噪声，不注入
+            end
+        end
+    else 降级: TF词袋
+        LTM->>LTM: buildVocab(query) 扩充词表
+        LTM->>LTM: textToVector(query) → TF向量
+        loop 遍历所有LTM条目
+            LTM->>LTM: cosine(queryTF, itemTF)
+            LTM->>LTM: score = sim×0.7 + importance×0.3
+        end
+    end
+    LTM-->>Agent: 召回记忆 [{content, score}, ...]
+
+    Agent->>GRAPH: GraphRecall(相关节点, maxHops=2)
+    GRAPH-->>Agent: 图扩展记忆 [关联历史, ...]
+
+    Agent->>PREF: BuildContext()
+    PREF-->>Agent: "【用户偏好】\n姓名: 小明\n喜好: 篮球"
+
+    Agent->>LLM: Chat(systemPrompt + 偏好 + LTM记忆 + 图记忆 + STM历史 + 当前消息)
+    LLM-->>Agent: "你好小明！喜欢篮球很棒..."
+
+    Note over User,PG: ═══════════ 每轮对话: 写入阶段 ═══════════
+    Agent->>STM: Add(assistant, 回答内容)
+
+    Agent->>LTM: Store(用户消息, importance, embedding?)
+    alt Embedding API 可用
+        Agent->>EMB: Embed(消息内容)
+        EMB-->>LTM: 语义向量
+        loop 去重检测: vs 每条已有条目
+            LTM->>LTM: cosine(newEmb, itemEmb)
+            alt sim ≥ 0.95 (去重阈值)
+                LTM->>LTM: 更新已有条目重要性+访问时间
+            else sim < 0.95
+                LTM->>LTM: 新增条目
+            end
+        end
+        LTM->>PG: SaveLongTermItem(content, vector, importance)
+    else 降级: TF词袋
+        LTM->>LTM: buildVocab + textToVector
+        LTM->>PG: SaveLongTermItem(content, nil, importance)
+    end
+
+    Agent->>GRAPH: 新增记忆节点 + 关系<br/>(FOLLOWS/SIMILAR_TO/CAUSES)
+
+    par 异步: LLM NER偏好提取
+        Agent->>LLM: "从以下对话提取用户偏好: ..."
+        LLM-->>Agent: {"姓名":"小明","喜好":"篮球"}
+        Agent->>PREF: SaveBatch(kvs)
+        PREF->>PG: SavePreference(key, value)
+    and 同步: 规则兜底 (立即生效)
+        Agent->>PREF: ExtractAndSave("我喜欢打篮球")
+        PREF-->>Agent: key="喜好", value="打篮球", ok=true
+        PREF->>PG: SavePreference(key, value)
+    end
+
+    Note over User,PG: ═══════════ 合并触发: 每5条新记忆 ═══════════
+    LTM->>LTM: NeedConsolidation()?
+    alt storeCount ≥ TriggerInterval(5)
+        Note over LTM: Phase 1: 重要性衰减
+        LTM->>LTM: importance × DecayRate^days<br/>(每日×0.995, 30天≈0.86)
+        Note over LTM: Phase 2: 去重 + 合并
+        loop 两两比较相似度
+            alt sim ≥ 0.95 (DedupThreshold)
+                LTM->>LTM: 保留importance更高的, 删除另一条
+                LTM->>PG: DELETE removed IDs
+                LTM->>GRAPH: 删除对应图节点
+            else sim ≥ 0.80 (SimilarityThreshold)
+                LTM->>LTM: mergeItems(): 内容拼接/保留较长
+                LTM->>PG: UPDATE merged item, DELETE被合并条目
+                LTM->>GRAPH: 合并图关系, 保护高中心度节点
+            end
+        end
+        Note over LTM: Phase 3: 过期淘汰
+        loop 检查每条记忆
+            alt days > TTL(30) AND importance < Min(0.3)
+                LTM->>LTM: 删除过期条目
+                LTM->>PG: DELETE expired IDs
+            end
+        end
+        LTM->>LTM: rebuildVocab() 重建词表
+    end
+
+    Note over User,PG: ═══════════ 会话结束 ═══════════
+    Note right of STM: 进程消亡, STM清除<br/>不持久化（设计如此）
+    Note right of LTM: 已实时持久化到PG<br/>Consolidation结果已同步
+    Note right of GRAPH: 图关系已持久化到Neo4j<br/>下次启动恢复
+    Note right of PREF: 已实时持久化到PG<br/>下次启动LoadPreferences恢复
+```
+
+
+## 技术实现亮点
+
+- **RAG 检索增强**：
+    - 支持三路混合检索（Milvus 语义向量、ES BM25 关键词、Neo4j 知识图谱），RRF 融合排序。
+    - 文本分块采用窗口重叠，提升召回覆盖率。
+    - 检索模式自动切换，单路故障自动降级，支持企业级高可用。
+    - 检索结果结构化，便于 LLM 合成与追溯。
+
+- **三层记忆系统**：
+    - 短期记忆：滑动窗口保存最近 N 轮对话。
+    - 长期记忆：Embedding/TF 双层，支持去重、合并、衰减、过期淘汰。
+    - 偏好记忆：LLM+规则自动提取用户偏好，持久化跨会话恢复。
+
+- **图增强记忆**：
+    - 记忆写入时自动建立时序（FOLLOWS）、相似（SIMILAR_TO）等关系。
+    - 支持图扩展召回，发现间接关联历史记忆。
+    - 合并淘汰时保护高中心度节点，防止核心知识丢失。
+
+- **智能体与工具链**：
+    - 路由优先级：ReAct 复合推理 > 单工具 > RAG 检索 > 纯对话。
+    - 工具链支持自定义扩展，RAG 检索作为知识库工具无缝集成。
+    - ReAct 规划-执行-生成流程，任务快照与重试机制保障稳定性。
+
+- **沙箱执行**：
+    - 支持 Docker（资源隔离 + 安全限制）、Local（直接执行）、Mock（测试）三种后端。
+    - 命令长度限制、白名单校验、资源配额（CPU/内存/PID/网络/只读文件系统）。
+
+- **工程与基础设施**：
+    - PostgreSQL 持久化所有关键数据。
+    - Milvus/ES/Neo4j/Kafka 可选，自动降级，适配多种部署环境。
+    - 前后端解耦，支持多端接入。
+
+---
+
+## 快速开始
+
+### 本地运行
+
+```bash
+# 1. 安装依赖
+go mod tidy
+
+# 2. 启动基础设施（需要 Docker Desktop）
+docker compose up -d
+
+# 3. 启动应用
+go run .
+
+# 4. 访问 http://localhost:8090
+```
+
+### Docker 部署
+
+```bash
+# 编译 + 启动全部服务
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o final-agent .
+docker compose up -d --build
+```
+
+### 配置
+
+编辑 `config/config.yaml`，填入 API Key：
+
+- `llm.api_key` — 火山引擎 Ark 对话模型 API Key
+- `embedding.api_key` — 火山引擎 Embedding 模型 API Key
+- `search.api_key` — Tavily 搜索 API Key（可选）
+
+> 所有基础设施（Milvus/PG/ES/Kafka/Neo4j）均为可选，连接失败自动降级为内存模式，不影响启动。
+
+---
 
 ## 目录结构
 
-```text
-.
-├── cmd/server/                 # 后端入口
-├── config/                     # YAML 配置加载与默认值
+```
+├── config/                   配置加载（YAML → 结构体）
+│   ├── config.go
+│   └── config.yaml
 ├── internal/
-│   ├── application/
-│   │   ├── auth/               # 注册、登录、JWT 应用服务
-│   │   ├── chat/               # UnifiedAgent、ReAct、RAG 路由、子 Agent、文档库
-│   │   └── skill/              # Skill 广场应用服务
-│   ├── domain/                 # 领域模型：tool / skill / rag / memory / document / sandbox
-│   ├── infrastructure/         # LLM、持久化、平台连接、skillhub、工具实现
-│   ├── interfaces/http/        # chi handler + middleware
-│   ├── pkg/logger/             # slog 封装
-│   └── usercontext/            # userID context helpers
-├── web/                        # Vue 3 前端
-├── docs/                       # 架构文档和示例 skill 文档
-├── docker-compose.yml          # 本地基础设施
-├── Dockerfile                  # 后端镜像
+│   ├── agent/                智能体核心与调度（ReAct + Harness + 路由）
+│   ├── graph/                知识图谱（Neo4j 实体关系抽取 + 图检索）
+│   ├── handler/              HTTP API 路由处理
+│   ├── infra/                基础设施连接（Milvus / PG / ES / Kafka）
+│   ├── llm/                  LLM/Embedding 客户端（真实 API + Mock 降级）
+│   ├── memory/               三层记忆系统（短期 / 长期 / 用户偏好 + 图增强）
+│   ├── rag/                  RAG 引擎（三路混合检索 + RRF 融合）
+│   ├── sandbox/              沙箱执行（Docker / Local / Mock + 安全校验）
+│   └── tools/                工具定义与调用（time/weather/search/exec_command）
+├── frontend/                 单文件前端 HTML
+├── main.go                   入口
+├── docker-compose.yml        基础设施编排
+├── Dockerfile                应用容器镜像
 └── go.mod
 ```
 
-## 数据与持久化
+---
 
-PostgreSQL 会保存：
+## 致谢
 
-- 用户和密码哈希
-- 聊天历史
-- 用户偏好
-- 长期记忆
-- RAG chunks 元数据
-- 文档库
-- task snapshots
-- installed skills
-
-Milvus 保存向量索引，Elasticsearch 保存 BM25 索引，Neo4j 保存知识图谱和图增强记忆，Kafka 用于事件发布。
-
-如果某个基础设施连接失败，启动不会整体失败，但相关能力会降级。例如 PostgreSQL 不可用时，登录注册、Skill 安装、记忆和文档持久化会失败或不可用。
-
-## 配置重点
-
-| 配置 | 说明 |
-| --- | --- |
-| `server.port` | 后端监听端口，默认 `8090` |
-| `auth.jwt_secret` | JWT 密钥，生产必须用环境变量注入 |
-| `llm.model` | 最终回答模型 |
-| `llm.fast_model` | Planner、参数抽取、子 Agent、RAG 改写等内部步骤模型 |
-| `embedding.model` | RAG 和记忆用向量模型 |
-| `rag.rag_milvus_dim` | Milvus 向量维度，需和 embedding 模型一致 |
-| `harness.step_timeout_ms` | 普通工具单步超时 |
-| `graph_runtime.max_parallel` | 图执行最大并行节点数 |
-| `sandbox.backend` | `docker` / `local` / `mock` |
-| `sandbox.artifact_host_dir` | 任务产物输出目录 |
-| `skillhub.enabled` | 是否启用 GitHub Skill 广场 |
-| `skillhub.keyword` | GitHub 搜索关键词，多词是 AND |
-
-## 部署说明
-
-后端 Dockerfile 只打包 Go API。前端需要独立构建并由 nginx 或静态服务器托管：
-
-```bash
-cd web
-npm run build
-```
-
-生产部署建议：
-
-- 前端静态站点托管 `web/dist/`。
-- nginx 将 `/api`、`/healthz`、`/readyz` 反代到后端。
-- 不要提交真实 API Key、JWT_SECRET、GitHub Token。
-- 如果开启 pprof，必须设置 `PPROF_ADMIN_TOKEN`，并限制访问来源。
-
-`web/nginx.conf.example` 提供了反代示例。
-
-## 常见问题
-
-**打开 `http://localhost:8090` 只有一句 API 提示？**
-
-正常。后端不再托管前端，请启动 `web/` 的 Vite dev server 或部署 `web/dist/`。
-
-**业务接口返回 401？**
-
-除 `/api/auth/register`、`/api/auth/login`、`/healthz`、`/readyz` 外都需要 JWT。前端登录后会自动注入 token。
-
-**Skill 安装了但不调用？**
-
-安装后还要在已安装列表打开开关。并且只有普通 `react` loop 会合并 Skill，RAG 简单问答不会合并。
-
-**GitHub Skill 没有真实插件能力？**
-
-这是当前设计边界。GitHub Skill 只是 prompt 包装，不会 clone 仓库、不会执行仓库代码。
-
-**LLM 一直降级 mock？**
-
-检查 `llm.api_key`、`llm.api_url`、模型名和网络。配置里的 `"."` 是占位符，会触发真实请求但通常失败。
-
-**RAG 结果不准或 Milvus 报维度错误？**
-
-确认 `rag.rag_milvus_dim` 与 embedding 模型输出维度一致，并在变更维度后清理旧 Milvus collection / 数据卷。
-
-## 测试状态
-
-当前可用：
-
-```bash
-go test ./...
-```
-
-前端目前没有独立单元测试脚本，至少应运行：
-
-```bash
-cd web
-npm run build
-```
-
-## 许可证
-
-仓库当前未声明开源许可证。对外发布或商用前请先补充 LICENSE。
+本项目受多模态智能体、RAG、知识图谱、记忆增强等前沿研究启发，欢迎交流与合作。
